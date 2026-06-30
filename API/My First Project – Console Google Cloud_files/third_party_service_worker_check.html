@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!-- saved from url=(0085)https://cloudshell.googleusercontent.com/static/third_party_service_worker_check.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+  
+    <script>
+      (() => {
+        const ttp = window.trustedTypes?.createPolicy('trust-bypass', {
+          createScriptURL: url => url,
+        });
+        function relayDisabled() {
+          parent.postMessage({
+            event: '3pserviceworkersdisabled',
+            source: 'cloudshell.googleusercontent.com',
+          }, '*');
+        }
+        if ('serviceWorker' in this.window.navigator) {
+          const sw = window.navigator.serviceWorker;
+          swUrl = ttp?.createScriptURL('sw.js') ?? 'sw.js';
+          sw.register(swUrl).catch(() => {
+            relayDisabled();
+          });
+        } else {
+          relayDisabled();
+        }
+      })();
+    </script>
+  <link rel="stylesheet" href="chrome-extension://1843e3b3-0473-4c2f-be01-ec03224bb414/app/content-style.css"></head>
+<body></body></html>

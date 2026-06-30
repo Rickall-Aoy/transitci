@@ -1,0 +1,34 @@
+# Flutter/Dart/Pub related
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code related
+.vscode/
+
+# MacOS
+.DS_Store
+
+# Android related
+**/gradle-wrapper.jar
+**/gradle-wrapper.properties
+**/local.properties
+
+# iOS related
+**/Flutter/Flutter.framework
+**/Flutter/Flutter.podspec
+**/Pods/
+**/Runner.xcworkspace/
+
+# Generated files
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata

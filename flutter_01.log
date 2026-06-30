@@ -1,0 +1,76 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter debug_adapter
+
+## exception
+
+RPCError: readyToResume: (-32603) Unexpected DWDS error for resume: WipError -32000 Inspected target navigated or closed
+
+```
+#0      new _OutstandingRequest (package:vm_service/src/vm_service.dart:268:34)
+#1      VmService._call.<anonymous closure> (package:vm_service/src/vm_service.dart:1950:25)
+#2      VmService._call (package:vm_service/src/vm_service.dart:1962:8)
+#3      VmService.callServiceExtension (package:vm_service/src/vm_service.dart:1901:14)
+#4      VmService.callMethod (package:vm_service/src/vm_service.dart:1884:12)
+#5      DdsExtension._callHelper (package:dds_service_extensions/dds_service_extensions.dart:369:12)
+#6      DdsExtension.readyToResume (package:dds_service_extensions/dds_service_extensions.dart:327:12)
+<asynchronous suspension>
+#7      IsolateManager._readyToResume (package:dds/src/dap/isolate_manager.dart:425:7)
+<asynchronous suspension>
+#8      IsolateManager.readyToResumeThread (package:dds/src/dap/isolate_manager.dart:306:5)
+<asynchronous suspension>
+#9      IsolateManager._handlePause (package:dds/src/dap/isolate_manager.dart:695:7)
+<asynchronous suspension>
+#10     IsolateManager.handleEvent (package:dds/src/dap/isolate_manager.dart:207:7)
+<asynchronous suspension>
+#11     DartDebugAdapter.handleDebugEvent (package:dds/src/dap/adapters/dart.dart:2470:5)
+<asynchronous suspension>
+#12     DartDebugAdapter._withErrorHandling (package:dds/src/dap/adapters/dart.dart:2832:14)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[✓] Flutter (Channel stable, 3.41.9, on Microsoft Windows [Version 10.0.26200.8737], locale en-US) [1,409ms]
+    • Flutter version 3.41.9 on channel stable at D:\dossierApp\flutter
+    • Upstream repository https://github.com/flutter/flutter.git
+    • Framework revision 00b0c91f06 (9 weeks ago), 2026-04-29 10:03:19 -0700
+    • Engine revision 42d3d75a56
+    • Dart version 3.11.5
+    • DevTools version 2.54.2
+    • Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop, enable-windows-desktop, enable-android, enable-ios, cli-animations, enable-native-assets, omit-legacy-version-file, enable-lldb-debugging, enable-uiscene-migration
+
+[✓] Windows Version (11 Home 64-bit, 25H2, 2009) [5.6s]
+
+[✓] Android toolchain - develop for Android devices (Android SDK version 36.1.0) [10.0s]
+    • Android SDK at C:\Users\jeanm\AppData\Local\Android\sdk
+    • Emulator version 36.2.12.0 (build_id 14214601) (CL:N/A)
+    • Platform android-36, build-tools 36.1.0
+    • Java binary at: C:\Program Files\Common Files\Oracle\Java\javapath\java.exe
+      This JDK was found in the system PATH.
+      To manually set the JDK path, use: `flutter config --jdk-dir="path/to/jdk"`.
+    • Java version Java(TM) SE Runtime Environment (build 17.0.17+8-LTS-360)
+    • All Android licenses accepted.
+
+[✓] Chrome - develop for the web [441ms]
+    • Chrome at C:\Program Files\Google\Chrome\Application\chrome.exe
+
+[✓] Visual Studio - develop Windows apps (Visual Studio Community 2026 18.6.3) [435ms]
+    • Visual Studio at C:\Program Files\Microsoft Visual Studio\18\Community
+    • Visual Studio Community 2026 version 18.6.11828.311
+    • Windows 10 SDK version 10.0.26100.0
+
+[✓] Connected device (3 available) [1,083ms]
+    • Windows (desktop) • windows • windows-x64    • Microsoft Windows [Version 10.0.26200.8737]
+    • Chrome (web)      • chrome  • web-javascript • Google Chrome 149.0.7827.158
+    • Edge (web)        • edge    • web-javascript • Microsoft Edge 149.0.4022.80
+
+[✓] Network resources [1,955ms]
+    • All expected network resources are available.
+
+• No issues found!
+```

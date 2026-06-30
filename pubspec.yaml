@@ -1,0 +1,34 @@
+name: transit_ci
+description: A Flutter app for comparing transport options and walking navigation.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  google_maps_flutter: ^2.5.3
+  geolocator: ^11.0.0
+  geocoding: ^3.0.0
+  flutter_polyline_points: ^2.0.0
+  provider: ^6.1.2
+  http: ^1.2.1
+  lottie: ^3.1.0
+  animated_text_kit: ^4.2.2
+  shimmer: ^3.0.0
+  shared_preferences: ^2.2.3
+  smooth_page_indicator: ^1.1.0
+  uuid: ^4.3.3
+  supabase_flutter: ^2.3.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/
+    - assets/lottie/
