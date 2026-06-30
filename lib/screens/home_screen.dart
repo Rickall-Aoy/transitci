@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:lottie/lottie.dart' hide Marker;
 import 'package:shimmer/shimmer.dart';
 import '../services/location_service.dart';
@@ -36,14 +39,21 @@ class _HomeScreenState extends State<HomeScreen>
   bool _autoTheme = false;
   String? _errorMessage;
   Set<Marker> _markers = {};
+  Set<Polyline> _polylines = {};
   Timer? _vehiculeTimer;
   StreamSubscription<Position>? _positionStreamSub;
+  bool _followUser = false;
   List<ArretSignale> _arretsSignales = [];
   BitmapDescriptor? _iconWoroWoro;
   BitmapDescriptor? _iconGbaka;
   BitmapDescriptor? _iconSotra;
   BitmapDescriptor? _iconYango;
   BitmapDescriptor? _iconStop;
+  BitmapDescriptor? _iconOSMStopA;
+  BitmapDescriptor? _iconUserPosition;
+  BitmapDescriptor? _iconUserPositionPulse;
+  Timer? _userBlinkTimer;
+  bool _userBlinkOn = false;
 
   // Controllers d'animation
   late AnimationController _panelController;
@@ -130,12 +140,12 @@ class _HomeScreenState extends State<HomeScreen>
     final double dpr = MediaQuery.of(context).devicePixelRatio;
 
     final config = ImageConfiguration(
-      size: const Size(36, 36),
+      size: const Size(28, 28),
       devicePixelRatio: dpr,
     );
 
     final configSmall = ImageConfiguration(
-      size: const Size(24, 24),
+      size: const Size(20, 20),
       devicePixelRatio: dpr,
     );
 
@@ -159,8 +169,117 @@ class _HomeScreenState extends State<HomeScreen>
       configSmall,
       'assets/icons/stop.jpg',
     );
+    _iconOSMStopA = await _createPinMarker('A', const Color(0xFFFF6B2B));
+    _iconUserPosition = await _createDotMarker(const Color(0xFF00C896));
+    _iconUserPositionPulse = await _createPulsingDotMarker(const Color(0xFF00C896));
+
+    // Start blink timer
+    _startUserBlink();
 
     if (mounted) setState(() {});
+  }
+
+  Future<BitmapDescriptor> _createPinMarker(String letter, Color color) async {
+    const int size = 84;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()));
+    final paint = Paint()..color = color;
+
+    final pinPath = Path()
+      ..moveTo(size * 0.5, size * 0.95)
+      ..quadraticBezierTo(size * 0.6, size * 0.75, size * 0.5, size * 0.6)
+      ..quadraticBezierTo(size * 0.4, size * 0.75, size * 0.5, size * 0.95)
+      ..close();
+
+    canvas.drawPath(pinPath, paint);
+    canvas.drawCircle(Offset(size * 0.5, size * 0.42), size * 0.32, paint);
+
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6;
+    canvas.drawCircle(Offset(size * 0.5, size * 0.42), size * 0.32, borderPaint);
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: letter,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 40,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(
+        size * 0.5 - textPainter.width / 2,
+        size * 0.42 - textPainter.height / 2,
+      ),
+    );
+
+    final image = await recorder.endRecording().toImage(size, size);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
+  }
+
+  Future<BitmapDescriptor> _createDotMarker(Color color) async {
+    const int size = 56;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()));
+    final paint = Paint()..color = color;
+    canvas.drawCircle(Offset(size / 2, size / 2), size * 0.2, paint);
+    canvas.drawCircle(
+      Offset(size / 2, size / 2),
+      size * 0.2,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5,
+    );
+
+    final image = await recorder.endRecording().toImage(size, size);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
+  }
+
+  Future<BitmapDescriptor> _createPulsingDotMarker(Color color) async {
+    const int size = 92;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()));
+
+    // Outer pale ring
+    final ringPaint = Paint()..color = color.withOpacity(0.18);
+    canvas.drawCircle(Offset(size / 2, size / 2), size * 0.28, ringPaint);
+
+    // Inner solid dot
+    final dotPaint = Paint()..color = color;
+    canvas.drawCircle(Offset(size / 2, size / 2), size * 0.16, dotPaint);
+
+    // White border
+    canvas.drawCircle(
+      Offset(size / 2, size / 2),
+      size * 0.16,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6,
+    );
+
+    final image = await recorder.endRecording().toImage(size, size);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
+  }
+
+  void _startUserBlink() {
+    // Avoid multiple timers
+    _userBlinkTimer?.cancel();
+    _userBlinkTimer = Timer.periodic(const Duration(milliseconds: 700), (_) {
+      _userBlinkOn = !_userBlinkOn;
+      _updateUserMarker();
+    });
   }
 
   Future<void> _loadPosition() async {
@@ -182,6 +301,7 @@ class _HomeScreenState extends State<HomeScreen>
       _updateUserMarker();
 
       _chargerMarqueurs();
+      await _chargerArretsOSM();
       await _chargerArretsSignales();
 
       // Charger les positions des véhicules (chauffeurs) et démarrer un timer
@@ -202,6 +322,14 @@ class _HomeScreenState extends State<HomeScreen>
         if (!mounted) return;
         setState(() => _currentPosition = pos);
         _updateUserMarker();
+        if (_followUser && _mapController != null) {
+          _mapController!.animateCamera(
+            CameraUpdate.newLatLngZoom(
+              LatLng(pos.latitude, pos.longitude),
+              16,
+            ),
+          );
+        }
       });
 
     } catch (e) {
@@ -265,6 +393,77 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     setState(() => _markers = markers);
+  }
+
+  Future<void> _chargerArretsOSM() async {
+    const south = 5.0;
+    const west = -4.5;
+    const north = 5.5;
+    const east = -3.8;
+    const query = '''
+      [out:json][timeout:25];
+      (
+        node["highway"="bus_stop"]($south,$west,$north,$east);
+        node["public_transport"="platform"]($south,$west,$north,$east);
+        node["amenity"="bus_station"]($south,$west,$north,$east);
+      );
+      out body;
+    ''';
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://overpass-api.de/api/interpreter'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {'data': query},
+      );
+
+      if (response.statusCode != 200) {
+        return;
+      }
+
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final elements = json['elements'] as List<dynamic>?;
+      if (elements == null || elements.isEmpty) return;
+
+      final osmMarkers = elements.map((element) {
+        final data = element as Map<String, dynamic>;
+        final id = data['id']?.toString() ?? UniqueKey().toString();
+        final lat = data['lat'] as double?;
+        final lon = data['lon'] as double?;
+        final tags = data['tags'] as Map<String, dynamic>?;
+        final name = tags?['name']?.toString() ?? 'Arrêt OSM';
+        final stopType = tags?['public_transport'] ?? tags?['highway'] ?? tags?['amenity'] ?? 'bus_stop';
+
+        if (lat == null || lon == null) return null;
+
+        final distanceKm = _currentPosition == null
+            ? ''
+            : '${(LocationService.distanceEnMetres(
+                    lat1: _currentPosition!.latitude,
+                    lon1: _currentPosition!.longitude,
+                    lat2: lat,
+                    lon2: lon,
+                  ) / 1000).toStringAsFixed(1)} km';
+
+        return Marker(
+          markerId: MarkerId('osm_$id'),
+          position: LatLng(lat, lon),
+          icon: _iconOSMStopA ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          anchor: const Offset(0.5, 1.0),
+          infoWindow: InfoWindow(
+            title: name,
+            snippet: distanceKm.isNotEmpty ? distanceKm : 'OSM $stopType',
+          ),
+        );
+      }).whereType<Marker>().toSet();
+
+      if (!mounted) return;
+      setState(() {
+        _markers = Set<Marker>.from(_markers)..addAll(osmMarkers);
+      });
+    } catch (_) {
+      // ignore overpass failures silently
+    }
   }
 
   Future<void> _chargerArretsSignales() async {
@@ -389,30 +588,21 @@ class _HomeScreenState extends State<HomeScreen>
     return Scaffold(
       body: Stack(
         children: [
-          // ── Carte réduite ──
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 340,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
-              ),
-              child: GoogleMap(
-                key: const ValueKey('home_google_map'),
-                initialCameraPosition: _defaultPosition,
-                style: _mapStyle,
-                onMapCreated: (controller) {
-                  _mapController = controller;
-                },
-                markers: _markers,
-                myLocationEnabled: true,
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: false,
-                mapType: MapType.normal,
-              ),
+          // ── Carte pleine page ──
+          Positioned.fill(
+            child: GoogleMap(
+              key: const ValueKey('home_google_map'),
+              initialCameraPosition: _defaultPosition,
+              style: _mapStyle,
+              onMapCreated: (controller) {
+                _mapController = controller;
+              },
+              polylines: _polylines,
+              markers: _markers,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              mapType: MapType.normal,
             ),
           ),
 
@@ -431,6 +621,13 @@ class _HomeScreenState extends State<HomeScreen>
                   icon: Icons.remove,
                   onTap: _zoomOut,
                 ),
+                      const SizedBox(height: 12),
+                      _buildMapControlButton(
+                        icon: Icons.directions_bus,
+                        onTap: _chargerItineraireVersArretLePlusProche,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildFollowButton(),
               ],
             ),
           ),
@@ -1046,6 +1243,154 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Future<Marker?> _trouverArretOSMLePlusProche() async {
+    if (_currentPosition == null) return null;
+
+    Marker? meilleurArret;
+    double distanceMin = double.infinity;
+
+    for (final marqueur in _markers) {
+      if (!marqueur.markerId.value.startsWith('osm_')) continue;
+
+      final distance = LocationService.distanceEnMetres(
+        lat1: _currentPosition!.latitude,
+        lon1: _currentPosition!.longitude,
+        lat2: marqueur.position.latitude,
+        lon2: marqueur.position.longitude,
+      );
+
+      if (distance < distanceMin) {
+        distanceMin = distance;
+        meilleurArret = marqueur;
+      }
+    }
+
+    return meilleurArret;
+  }
+
+  Future<void> _chargerItineraireVersArretLePlusProche() async {
+    if (_currentPosition == null) return;
+
+    final arret = await _trouverArretOSMLePlusProche();
+    if (arret == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucun arrêt OSM trouvé près de vous.')),
+      );
+      return;
+    }
+
+    final points = await _getRoutePoints(
+      _currentPosition!.latitude,
+      _currentPosition!.longitude,
+      arret.position.latitude,
+      arret.position.longitude,
+    );
+
+    if (points.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de charger l\'itinéraire vers l\'arrêt le plus proche.')),
+      );
+      return;
+    }
+
+    final routePolyline = Polyline(
+      polylineId: const PolylineId('route_nearest_stop'),
+      points: points,
+      color: const Color(0xFFFF6B2B),
+      width: 6,
+      jointType: JointType.round,
+      startCap: Cap.roundCap,
+      endCap: Cap.roundCap,
+    );
+
+    final borderPolyline = Polyline(
+      polylineId: const PolylineId('route_nearest_stop_border'),
+      points: points,
+      color: Colors.white.withOpacity(0.35),
+      width: 10,
+      jointType: JointType.round,
+      startCap: Cap.roundCap,
+      endCap: Cap.roundCap,
+    );
+
+    final titreArret = arret.infoWindow.title ?? 'Arrêt le plus proche';
+
+    setState(() {
+      _polylines = {borderPolyline, routePolyline};
+      final nouveaux = Set<Marker>.from(_markers);
+      nouveaux.removeWhere((m) => m.markerId.value == 'nearest_osm_stop');
+      nouveaux.add(Marker(
+        markerId: const MarkerId('nearest_osm_stop'),
+        position: arret.position,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+        infoWindow: InfoWindow(
+          title: titreArret,
+          snippet: 'Arrêt le plus proche',
+        ),
+      ));
+      _markers = nouveaux;
+    });
+
+    _ajusterCameraSurItineraire(points);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Itinéraire chargé vers $titreArret.')),
+    );
+  }
+
+  Future<List<LatLng>> _getRoutePoints(
+      double fromLat, double fromLon, double toLat, double toLon) async {
+    try {
+      final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/foot/'
+        '$fromLon,$fromLat;$toLon,$toLat'
+        '?overview=full&geometries=geojson',
+      );
+
+      final response = await http.get(url);
+      if (response.statusCode != 200) return [];
+
+      final data = jsonDecode(response.body);
+      final routes = data['routes'] as List<dynamic>?;
+      if (routes == null || routes.isEmpty) return [];
+
+      final coords = routes[0]['geometry']['coordinates'] as List<dynamic>;
+      return coords
+          .map((c) => LatLng((c as List<dynamic>)[1].toDouble(), c[0].toDouble()))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  void _ajusterCameraSurItineraire(List<LatLng> points) {
+    if (_mapController == null || points.isEmpty) return;
+
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLon = points.first.longitude;
+    double maxLon = points.first.longitude;
+
+    for (final point in points) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLon) minLon = point.longitude;
+      if (point.longitude > maxLon) maxLon = point.longitude;
+    }
+
+    _mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(minLat - 0.003, minLon - 0.003),
+          northeast: LatLng(maxLat + 0.003, maxLon + 0.003),
+        ),
+        100,
+      ),
+    );
+  }
+
   Future<void> _chargerVehiculesLive() async {
     try {
       final vehicles = await SupabaseService.getVehiculesLive();
@@ -1114,16 +1459,59 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildFollowButton() {
+    return GestureDetector(
+      onTap: _toggleFollow,
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: _followUser ? const Color(0xFFFF6B2B) : Colors.white.withOpacity(0.95),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.18),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Icon(
+          Icons.my_location,
+          color: _followUser ? Colors.white : const Color(0xFF333333),
+          size: 24,
+        ),
+      ),
+    );
+  }
+
+  void _toggleFollow() {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _followUser = !_followUser;
+    });
+    if (_followUser && _currentPosition != null && _mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+          16,
+        ),
+      );
+    }
+  }
+
   void _updateUserMarker() {
     if (_currentPosition == null) return;
     const userId = 'user_position';
     final nouveaux = Set<Marker>.from(_markers);
     nouveaux.removeWhere((m) => m.markerId.value == userId);
+    final iconToUse = (_userBlinkOn ? _iconUserPositionPulse : _iconUserPosition) ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
     nouveaux.add(Marker(
       markerId: const MarkerId(userId),
       position: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
       infoWindow: const InfoWindow(title: 'Moi'),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      anchor: const Offset(0.5, 0.5),
+      icon: iconToUse,
     ));
     if (mounted) setState(() => _markers = nouveaux);
   }
