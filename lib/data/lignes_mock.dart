@@ -1,234 +1,138 @@
 import '../models/ligne.dart';
 import '../models/gare.dart';
+import '../services/gtfs_loader.dart';
 
-const List<Ligne> lignesMock = [
+List<Ligne> get lignesMock =>
+    [...GtfsLoader.instance.lignes, ...lignesSotra];
 
-  // ══════════════════════════════════════
-  // WORO-WORO
-  // ══════════════════════════════════════
-
+const List<Ligne> lignesSotra = [
   Ligne(
-    id: 'ww_cocody_plateau',
-    nom: 'Cocody Mairie → Plateau',
-    type: TransportType.woroWoro,
-    couleurVehicule: 'Jaune',
-    prix: 300,
-    conseil: 'Dites votre arrêt au chauffeur avant de monter. '
-        'Ce woro-woro ne s\'arrête pas toujours à tous les points.',
-    terminusDepart: Arret(
-      nom: 'Gare Cocody Mairie',
-      latitude: 5.3600, longitude: -3.9989,
-    ),
-    terminusArrivee: Arret(
-      nom: 'Gare Plateau',
-      latitude: 5.3196, longitude: -4.0167,
-    ),
-    arretsPossibles: [
-      Arret(nom: 'CHU Cocody',         latitude: 5.3478, longitude: -3.9734),
-      Arret(nom: 'RTI',                latitude: 5.3550, longitude: -3.9900),
-      Arret(nom: 'Blockhauss',         latitude: 5.3400, longitude: -4.0050),
-      Arret(nom: 'Cathédrale St-Paul', latitude: 5.3280, longitude: -4.0120),
-    ],
-  ),
-
-  Ligne(
-    id: 'ww_angre_plateau',
-    nom: 'Angré → Plateau',
-    type: TransportType.woroWoro,
-    couleurVehicule: 'Jaune',
-    prix: 300,
-    conseil: 'Demandez si le chauffeur passe par votre arrêt avant de monter.',
-    terminusDepart: Arret(
-      nom: 'Gare Angré',
-      latitude: 5.3878, longitude: -3.9689,
-    ),
-    terminusArrivee: Arret(
-      nom: 'Gare Plateau',
-      latitude: 5.3196, longitude: -4.0167,
-    ),
-    arretsPossibles: [
-      Arret(nom: 'Deux Plateaux Vallon', latitude: 5.3744, longitude: -3.9856),
-      Arret(nom: 'Adjamé',              latitude: 5.3711, longitude: -4.0200),
-      Arret(nom: 'CHU Treichville',     latitude: 5.3100, longitude: -4.0050),
-    ],
-  ),
-
-  Ligne(
-    id: 'ww_adjame_plateau',
-    nom: 'Adjamé → Plateau',
-    type: TransportType.woroWoro,
-    couleurVehicule: 'Jaune',
-    prix: 200,
-    conseil: 'Arrêt à la demande entre Adjamé et le Plateau.',
-    terminusDepart: Arret(
-      nom: 'Gare Adjamé',
-      latitude: 5.3711, longitude: -4.0200,
-    ),
-    terminusArrivee: Arret(
-      nom: 'Gare Plateau',
-      latitude: 5.3196, longitude: -4.0167,
-    ),
-    arretsPossibles: [
-      Arret(nom: 'Marché Adjamé',    latitude: 5.3680, longitude: -4.0180),
-      Arret(nom: 'CHU Treichville',  latitude: 5.3100, longitude: -4.0050),
-    ],
-  ),
-
-  Ligne(
-    id: 'ww_attoban_bingerville',
-    nom: 'Riviera Attoban → Bingerville',
-    type: TransportType.woroWoro,
-    couleurVehicule: 'Jaune',
-    prix: 400,
-    conseil: 'Demandez au chauffeur s\'il va jusqu\'à Bingerville Centre '
-        'ou s\'arrête à l\'entrée.',
-    terminusDepart: Arret(
-      nom: 'Riviera Attoban',
-      latitude: 5.3800, longitude: -3.9200,
-    ),
-    terminusArrivee: Arret(
-      nom: 'Bingerville Centre',
-      latitude: 5.3569, longitude: -3.8861,
-    ),
-    arretsPossibles: [
-      Arret(nom: 'Riviera 3',          latitude: 5.3756, longitude: -3.9350),
-      Arret(nom: 'Riviera 4',          latitude: 5.3722, longitude: -3.9100),
-      Arret(nom: 'Bingerville Entrée', latitude: 5.3650, longitude: -3.9000),
-    ],
-  ),
-
-  Ligne(
-    id: 'ww_treichville_plateau',
-    nom: 'Treichville → Plateau',
-    type: TransportType.woroWoro,
+    id: 'st_marcory_plateau',
+    nom: 'Marcory Remblais → Plateau',
+    type: TransportType.sotra,
     couleurVehicule: 'Bleu',
-    prix: 300,
-    conseil: 'Arrêt à la demande. Précisez votre destination au chauffeur.',
+    prix: 200,
+    conseil: 'Bus SOTRA entre Marcory et Plateau.',
     terminusDepart: Arret(
-      nom: 'Gare Treichville',
-      latitude: 5.2969, longitude: -4.0011,
+      nom: 'Arrêt SOTRA Marcory Remblais',
+      latitude: 5.3020, longitude: -3.9750,
     ),
     terminusArrivee: Arret(
-      nom: 'Gare Plateau',
+      nom: 'Arrêt SOTRA Plateau',
       latitude: 5.3196, longitude: -4.0167,
     ),
     arretsPossibles: [
-      Arret(nom: 'CHU Treichville', latitude: 5.3100, longitude: -4.0050),
-      Arret(nom: 'Anoumabo',        latitude: 5.3000, longitude: -3.9900),
+      Arret(nom: 'Arrêt SOTRA Cocody CHU', latitude: 5.3478, longitude: -3.9734),
+      Arret(nom: 'Arrêt SOTRA Adjamé Liberté', latitude: 5.3650, longitude: -4.0250),
     ],
   ),
-
   Ligne(
-    id: 'ww_marcory_cocody',
-    nom: 'Marcory → Cocody',
-    type: TransportType.woroWoro,
-    couleurVehicule: 'Vert',
-    prix: 300,
-    conseil: 'Demandez si le chauffeur va jusqu\'au CHU ou s\'arrête avant.',
+    id: 'st_plateau_cocody',
+    nom: 'Plateau → Cocody CHU',
+    type: TransportType.sotra,
+    couleurVehicule: 'Bleu',
+    prix: 220,
+    conseil: 'Bus SOTRA vers Cocody CHU.',
     terminusDepart: Arret(
-      nom: 'Gare Marcory',
-      latitude: 5.3050, longitude: -3.9800,
-    ),
-    terminusArrivee: Arret(
-      nom: 'Gare Cocody Mairie',
-      latitude: 5.3600, longitude: -3.9989,
-    ),
-    arretsPossibles: [
-      Arret(nom: 'Koumassi',    latitude: 5.3150, longitude: -3.9650),
-      Arret(nom: 'CHU Cocody',  latitude: 5.3478, longitude: -3.9734),
-    ],
-  ),
-
-  // ══════════════════════════════════════
-  // GBAKA
-  // ══════════════════════════════════════
-
-  Ligne(
-    id: 'gb_yopougon_adjame',
-    nom: 'Yopougon → Adjamé',
-    type: TransportType.gbaka,
-    couleurVehicule: 'Multicolore',
-    prix: 250,
-    conseil: 'Le gbaka s\'arrête aux points habituels. '
-        'Criez votre arrêt quand vous approchez.',
-    terminusDepart: Arret(
-      nom: 'Gare Yopougon Selmer',
-      latitude: 5.3456, longitude: -4.0789,
-    ),
-    terminusArrivee: Arret(
-      nom: 'Gare Adjamé',
-      latitude: 5.3711, longitude: -4.0200,
-    ),
-    arretsPossibles: [
-      Arret(nom: 'Yopougon Wassakara',   latitude: 5.3300, longitude: -4.0900),
-      Arret(nom: 'Yopougon Marché',      latitude: 5.3500, longitude: -4.0650),
-      Arret(nom: 'Échangeur',            latitude: 5.3600, longitude: -4.0500),
-      Arret(nom: 'Adjamé 220 Logements', latitude: 5.3750, longitude: -4.0150),
-    ],
-  ),
-
-  Ligne(
-    id: 'gb_abobo_plateau',
-    nom: 'Abobo → Plateau',
-    type: TransportType.gbaka,
-    couleurVehicule: 'Multicolore',
-    prix: 300,
-    conseil: 'Arrêts principaux : Adjamé et CHU Treichville. '
-        'Demandez avant de monter.',
-    terminusDepart: Arret(
-      nom: 'Gare Abobo',
-      latitude: 5.4167, longitude: -4.0167,
-    ),
-    terminusArrivee: Arret(
-      nom: 'Plateau',
+      nom: 'Arrêt SOTRA Plateau',
       latitude: 5.3196, longitude: -4.0167,
     ),
+    terminusArrivee: Arret(
+      nom: 'Arrêt SOTRA Cocody CHU',
+      latitude: 5.3478, longitude: -3.9734,
+    ),
     arretsPossibles: [
-      Arret(nom: 'Adjamé',          latitude: 5.3711, longitude: -4.0200),
-      Arret(nom: 'CHU Treichville', latitude: 5.3100, longitude: -4.0050),
+      Arret(nom: 'Arrêt SOTRA Marcory Remblais', latitude: 5.3020, longitude: -3.9750),
+      Arret(nom: 'Arrêt SOTRA Adjamé Liberté', latitude: 5.3650, longitude: -4.0250),
     ],
   ),
-
   Ligne(
-    id: 'gb_marcory_plateau',
-    nom: 'Marcory → Plateau',
-    type: TransportType.gbaka,
-    couleurVehicule: 'Multicolore',
-    prix: 250,
-    conseil: 'Passe par Treichville. Criez votre arrêt à l\'approche.',
+    id: 'st_plateau_treichville',
+    nom: 'Plateau → Treichville',
+    type: TransportType.sotra,
+    couleurVehicule: 'Bleu',
+    prix: 220,
+    conseil: 'Bus SOTRA direct entre Plateau et Treichville.',
     terminusDepart: Arret(
-      nom: 'Gare Marcory',
-      latitude: 5.3050, longitude: -3.9800,
-    ),
-    terminusArrivee: Arret(
-      nom: 'Plateau',
+      nom: 'Arrêt SOTRA Plateau',
       latitude: 5.3196, longitude: -4.0167,
     ),
+    terminusArrivee: Arret(
+      nom: 'Arrêt SOTRA Treichville',
+      latitude: 5.2900, longitude: -4.0100,
+    ),
     arretsPossibles: [
-      Arret(nom: 'Remblais',         latitude: 5.3020, longitude: -3.9750),
-      Arret(nom: 'Treichville',      latitude: 5.2969, longitude: -4.0011),
-      Arret(nom: 'CHU Treichville',  latitude: 5.3100, longitude: -4.0050),
+      Arret(nom: 'Arrêt SOTRA Marcory Remblais', latitude: 5.3020, longitude: -3.9750),
+      Arret(nom: 'Arrêt SOTRA Cocody CHU', latitude: 5.3478, longitude: -3.9734),
     ],
   ),
-
   Ligne(
-    id: 'gb_yopougon_plateau',
-    nom: 'Yopougon → Plateau',
-    type: TransportType.gbaka,
-    couleurVehicule: 'Multicolore',
-    prix: 300,
-    conseil: 'Ligne directe. Peu d\'arrêts intermédiaires.',
+    id: 'st_cocody_adjame',
+    nom: 'Cocody CHU → Adjamé Liberté',
+    type: TransportType.sotra,
+    couleurVehicule: 'Bleu',
+    prix: 200,
+    conseil: 'Bus SOTRA entre Cocody CHU et Adjamé Liberté via Plateau.',
     terminusDepart: Arret(
-      nom: 'Gare Yopougon Selmer',
-      latitude: 5.3456, longitude: -4.0789,
+      nom: 'Arrêt SOTRA Cocody CHU',
+      latitude: 5.3478, longitude: -3.9734,
     ),
     terminusArrivee: Arret(
-      nom: 'Plateau',
-      latitude: 5.3196, longitude: -4.0167,
+      nom: 'Arrêt SOTRA Adjamé Liberté',
+      latitude: 5.3650, longitude: -4.0250,
     ),
     arretsPossibles: [
-      Arret(nom: 'Échangeur',       latitude: 5.3600, longitude: -4.0500),
-      Arret(nom: 'Adjamé',          latitude: 5.3711, longitude: -4.0200),
+      Arret(nom: 'Arrêt SOTRA Plateau', latitude: 5.3196, longitude: -4.0167),
+      Arret(nom: 'Arrêt SOTRA Marcory Remblais', latitude: 5.3020, longitude: -3.9750),
+    ],
+  ),
+  Ligne(
+    id: 'st_koumassi_treichville',
+    nom: 'Koumassi Akromiabla → Commissariat du Port',
+    type: TransportType.sotra,
+    couleurVehicule: 'Bleu',
+    prix: 200,
+    conseil: 'Bus SOTRA reliant le Terminus Akromiabla au Commissariat du Port.',
+    terminusDepart: Arret(
+      nom: 'Terminus Akromiabla',
+      latitude: 5.311900, longitude: -3.952010,
+    ),
+    terminusArrivee: Arret(
+      nom: 'Commissariat du Port',
+      latitude: 5.305040, longitude: -4.023150,
+    ),
+    arretsPossibles: [
+      Arret(nom: 'Carrefour Pinasse', latitude: 5.3133051, longitude: -3.9518204),
+      Arret(nom: 'Ancien Terminus 32', latitude: 5.3117002, longitude: -3.9487192),
+      Arret(nom: 'Pharmacie Fanny', latitude: 5.3099048, longitude: -3.9473289),
+      Arret(nom: 'Collège Bon Samaritain', latitude: 5.3077511, longitude: -3.9466929),
+      Arret(nom: 'Résidence Agouti', latitude: 5.3054068, longitude: -3.9451848),
+      Arret(nom: 'Cours la Source', latitude: 5.3015611, longitude: -3.9469718),
+      Arret(nom: 'Garage Akwaba', latitude: 5.2987485, longitude: -3.9476715),
+      Arret(nom: 'Pharmacie Regina', latitude: 5.2982383, longitude: -3.9497783),
+      Arret(nom: '1ère Entrée Sogefia', latitude: 5.2975990, longitude: -3.9526269),
+      Arret(nom: 'UTB Koumassi', latitude: 5.2961331, longitude: -3.9565104),
+      Arret(nom: 'Pharmacie St François', latitude: 5.2951940, longitude: -3.9603780),
+      Arret(nom: 'Pharmacie Iroko', latitude: 5.2940572, longitude: -3.9653560),
+      Arret(nom: 'Pharmacie Soleil', latitude: 5.2932236, longitude: -3.9690283),
+      Arret(nom: 'Pharmacie du Gabon', latitude: 5.2927669, longitude: -3.9712223),
+      Arret(nom: 'Station Shell Boulevard du Gabon', latitude: 5.2962463, longitude: -3.9796661),
+      Arret(nom: 'Clinique La Madone', latitude: 5.2944182, longitude: -3.9761133),
+      Arret(nom: 'Pharmacie Tiacoh', latitude: 5.2961308, longitude: -3.9792079),
+      Arret(nom: 'Quartier Hibiscus', latitude: 5.2974657, longitude: -3.9818291),
+      Arret(nom: 'Orca', latitude: 5.2983620, longitude: -3.9848626),
+      Arret(nom: 'PMI Marcory', latitude: 5.3012653, longitude: -3.9835430),
+      Arret(nom: 'Pharmacie Petit Marché', latitude: 5.3022895, longitude: -3.9848064),
+      Arret(nom: 'Hôtel Hamanieh', latitude: 5.3052787, longitude: -3.9888629),
+      Arret(nom: 'Station Total Marcory', latitude: 5.3076127, longitude: -3.9933399),
+      Arret(nom: 'Notre-Dame de la Paix', latitude: 5.3035364, longitude: -4.0031127),
+      Arret(nom: 'Carrefour Saint Jean Bosco', latitude: 5.305940, longitude: -4.004570),
+      Arret(nom: 'Treichotel', latitude: 5.3046605, longitude: -4.0087240),
+      Arret(nom: 'Avenue 15 Rue 12', latitude: 5.3039471, longitude: -4.0111420),
+      Arret(nom: 'Avenue 11 Rue 12', latitude: 5.3058112, longitude: -4.0117916),
+      Arret(nom: 'Arrêt Bolloré', latitude: 5.306600, longitude: -4.018900),
+      Arret(nom: 'Grand Moulin', latitude: 5.3069217, longitude: -4.0211455),
+      Arret(nom: 'Direction Générale du Port', latitude: 5.305420, longitude: -4.022560),
     ],
   ),
 ];

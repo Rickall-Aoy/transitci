@@ -10,10 +10,12 @@ import 'screens/chauffeur/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/passager/map_screen.dart';
 import 'screens/passager/search_screen.dart';
+import 'services/gtfs_loader.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await GtfsLoader.instance.initialize();
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.publishableKey,
