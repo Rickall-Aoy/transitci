@@ -16,9 +16,6 @@ import '../services/routing_service.dart';
 import '../services/settings_service.dart';
 import '../services/crowdsourcing_service.dart';
 import '../data/lignes_mock.dart';
-import '../config/busmaps_config.dart';
-import '../repositories/busmaps_repository.dart';
-import 'busmaps/line_screen.dart';
 import '../models/gare.dart';
 import 'results_screen.dart';
 import 'settings_screen.dart';
@@ -46,8 +43,6 @@ class _HomeScreenState extends State<HomeScreen>
   Timer? _vehiculeTimer;
   StreamSubscription<Position>? _positionStreamSub;
   bool _followUser = false;
-  bool _loadingBusMapsLine = false;
-  final BusMapsRepository _busMapsRepository = BusMapsRepository();
   List<ArretSignale> _arretsSignales = [];
   BitmapDescriptor? _iconWoroWoro;
   BitmapDescriptor? _iconGbaka;
@@ -937,8 +932,6 @@ class _HomeScreenState extends State<HomeScreen>
           _buildActionButtons(),
 
           const SizedBox(height: 16),
-          _buildBusMapsLineButton(),
-          const SizedBox(height: 16),
 
           // Barre de recherche
           _buildSearchBar(),
@@ -1042,137 +1035,6 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       ],
     );
-  }
-
-  Widget _buildBusMapsLineButton() {
-    final enabled = _currentPosition != null && !_loadingBusMapsLine;
-    return GestureDetector(
-      onTap: enabled ? _ouvrirBusMapsLine : null,
-      child: Opacity(
-        opacity: enabled ? 1 : 0.5,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFF6B2B), Color(0xFFFF8C55)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFFF6B2B).withOpacity(0.24),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: _loadingBusMapsLine
-              ? const Center(
-                  child: SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  ),
-                )
-              : const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.directions_bus, color: Colors.white, size: 20),
-                    SizedBox(width: 10),
-                    Text(
-                      'Voir une ligne BusMaps',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-
-  void _ouvrirBusMapsLine() {
-    if (_currentPosition == null || _loadingBusMapsLine) return;
-    if (!BusMapsConfig.isConfigured) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('BusMaps : clé API non configurée.')),
-      );
-      return;
-    }
-
-    _loadBusMapsLineFromNearbyStop();
-  }
-
-  Future<void> _loadBusMapsLineFromNearbyStop() async {
-    setState(() => _loadingBusMapsLine = true);
-    try {
-      final stops = await _busMapsRepository.fetchStopsInRadius(
-        latitude: _currentPosition!.latitude,
-        longitude: _currentPosition!.longitude,
-        radius: 1500,
-      );
-
-      if (stops.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Aucun arrêt BusMaps trouvé à proximité.')),
-        );
-        return;
-      }
-
-      final stop = stops.firstWhere(
-        (s) => s.regionName != null && s.regionName!.isNotEmpty,
-        orElse: () => stops.first,
-      );
-      final regionName = stop.regionName?.trim().isNotEmpty == true
-          ? stop.regionName!
-          : 'Abidjan';
-
-      final departures = await _busMapsRepository.fetchNextDeparturesByStop(
-        stopId: stop.stopId,
-        regionName: regionName,
-        countryIso: stop.countryIso ?? 'CI',
-      );
-
-      if (departures.departures.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Aucune course BusMaps disponible pour cet arrêt.')),
-        );
-        return;
-      }
-
-      final departure = departures.departures.first;
-      final routeName = departure.routeShortName.isNotEmpty
-          ? departure.routeShortName
-          : departure.destination;
-
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BusMapsLineScreen(
-            routeId: departure.routeId,
-            regionName: regionName,
-            countryIso: stop.countryIso ?? 'CI',
-            routeName: routeName,
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur BusMaps: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _loadingBusMapsLine = false);
-    }
   }
 
   Widget _buildSearchBar() {
