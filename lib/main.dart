@@ -35,7 +35,7 @@ class TransitCIApp extends StatelessWidget {
         '/': (context) => const HomeScreen(),
         '/passager/map': (context) => const MapScreen(),
         '/passager/search': (context) => const SearchScreen(),
-        '/chauffeur/login': (context) => LoginScreen(),
+        '/chauffeur/login': (context) => const LoginScreen(),
         '/chauffeur/register': (context) => const RegisterScreen(),
         '/chauffeur/home': (context) => const ChauffeurNavigation(),
         '/chauffeur': (context) => const ChauffeurNavigation(),
