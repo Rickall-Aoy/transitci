@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/trajet.dart';
 import '../services/settings_service.dart';
+import '../services/yango_estimate_service.dart';
 import 'navigation_screen.dart';
 
 enum Priorite { economique, rapide, equilibre }
@@ -11,6 +12,8 @@ class ResultsScreen extends StatefulWidget {
   final String destination;
   final double? destLat;
   final double? destLon;
+  final double? userLat;
+  final double? userLon;
 
   const ResultsScreen({
     super.key,
@@ -18,6 +21,8 @@ class ResultsScreen extends StatefulWidget {
     required this.destination,
     this.destLat,
     this.destLon,
+    this.userLat,
+    this.userLon,
   });
 
   @override
@@ -29,6 +34,7 @@ class _ResultsScreenState extends State<ResultsScreen>
   Priorite _priorite = Priorite.equilibre;
   bool _autoTheme = false;
   late List<Trajet> _options;
+  YangoEstimate? _yangoEstimate;
 
   late AnimationController _listController;
   late List<Animation<double>> _cardAnimations;
@@ -38,6 +44,19 @@ class _ResultsScreenState extends State<ResultsScreen>
     super.initState();
     _options = widget.trajets;
     _loadSettings();
+
+    if (widget.destLat != null &&
+        widget.destLon != null &&
+        widget.userLat != null &&
+        widget.userLon != null) {
+      _yangoEstimate = YangoEstimateService.estimer(
+        userLat: widget.userLat!,
+        userLon: widget.userLon!,
+        destLat: widget.destLat!,
+        destLon: widget.destLon!,
+        heure: DateTime.now().hour,
+      );
+    }
 
     _listController = AnimationController(
       vsync: this,
@@ -126,10 +145,26 @@ class _ResultsScreenState extends State<ResultsScreen>
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                    itemCount: _options.length,
+                    itemCount: _options.length + (_yangoEstimate != null ? 1 : 0),
                     itemBuilder: (_, i) {
-                      final anim = i < _cardAnimations.length
-                          ? _cardAnimations[i]
+                      if (_yangoEstimate != null && i == 0) {
+                        final estim = _yangoEstimate!;
+                        return AnimatedBuilder(
+                          animation: _cardAnimations.first,
+                          builder: (_, child) => Opacity(
+                            opacity: _cardAnimations.first.value,
+                            child: Transform.translate(
+                              offset: Offset(0, 40 * (1 - _cardAnimations.first.value)),
+                              child: child,
+                            ),
+                          ),
+                          child: _buildYangoCard(estim),
+                        );
+                      }
+
+                      final index = _yangoEstimate != null ? i - 1 : i;
+                      final anim = index < _cardAnimations.length
+                          ? _cardAnimations[index]
                           : _cardAnimations.last;
                       return AnimatedBuilder(
                         animation: anim,
@@ -140,7 +175,7 @@ class _ResultsScreenState extends State<ResultsScreen>
                             child: child,
                           ),
                         ),
-                        child: _buildTrajetCard(_options[i], i),
+                        child: _buildTrajetCard(_options[index], index),
                       );
                     },
                   ),
@@ -221,7 +256,7 @@ class _ResultsScreenState extends State<ResultsScreen>
               ),
             ),
             child: Text(
-              '${_options.length} option${_options.length > 1 ? 's' : ''}',
+              '${_options.length + (_yangoEstimate != null ? 1 : 0)} option${_options.length + (_yangoEstimate != null ? 1 : 0) > 1 ? 's' : ''}',
               style: const TextStyle(
                 color: Color(0xFFFF6B2B),
                 fontSize: 12,
@@ -287,6 +322,85 @@ class _ResultsScreenState extends State<ResultsScreen>
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildYangoCard(YangoEstimate estimate) {
+    const couleur = Color(0xFFFFCC00);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: couleur.withOpacity(0.6), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: couleur.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: couleur.withOpacity(0.1),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.local_taxi, color: couleur, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Yango (VTC)',
+                    style: TextStyle(
+                      color: couleur,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${estimate.prixMin} - ${estimate.prixMax} FCFA',
+                  style: TextStyle(
+                    color: _textColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                _buildStat('💰', '${estimate.prixMin}', 'FCFA', couleur),
+                _buildDivider(),
+                _buildStat('⏱️', '${estimate.dureeMinutes}', 'min', couleur),
+                _buildDivider(),
+                const Expanded(
+                  child: Column(
+                    children: [
+                      Icon(Icons.speed, color: Color(0xFFFFCC00), size: 18),
+                      SizedBox(height: 4),
+                      Text(
+                        '~25 km/h',
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,11 +4,14 @@ import '../models/gare.dart';
 import '../data/lignes_mock.dart';
 import '../services/crowdsourcing_service.dart';
 
+enum SignalerArretMode { ajout, probleme }
+
 class SignalerArretWidget extends StatefulWidget {
   final double latitude;
   final double longitude;
   final bool isNight;
   final VoidCallback onSuccess;
+  final SignalerArretMode mode;
 
   const SignalerArretWidget({
     super.key,
@@ -16,6 +19,7 @@ class SignalerArretWidget extends StatefulWidget {
     required this.longitude,
     required this.isNight,
     required this.onSuccess,
+    this.mode = SignalerArretMode.ajout,
   });
 
   @override
@@ -28,41 +32,53 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
   String? _ligneSelectionnee;
   bool _isLoading = false;
 
-  Color get _bgColor =>
-      widget.isNight ? const Color(0xFF161616) : Colors.white;
+  Color get _bgColor => widget.isNight ? const Color(0xFF161616) : Colors.white;
   Color get _textColor =>
       widget.isNight ? Colors.white : const Color(0xFF0A0A0A);
-  Color get _subColor =>
-      widget.isNight ? Colors.white54 : Colors.grey.shade500;
+  Color get _subColor => widget.isNight ? Colors.white54 : Colors.grey.shade500;
   Color get _surfaceColor =>
       widget.isNight ? const Color(0xFF1E1E1E) : const Color(0xFFF5F5F5);
 
   String _formatCoord(double value) => value.toStringAsFixed(4);
 
+  bool get _isProbleme => widget.mode == SignalerArretMode.probleme;
+
   String _emojiType(TransportType t) {
     switch (t) {
-      case TransportType.woroWoro: return '🚕';
-      case TransportType.gbaka:    return '🚐';
-      case TransportType.sotra:    return '🚌';
-      case TransportType.yango:    return '🚗';
+      case TransportType.woroWoro:
+        return '🚕';
+      case TransportType.gbaka:
+        return '🚐';
+      case TransportType.sotra:
+        return '🚌';
+      case TransportType.yango:
+        return '🚗';
     }
   }
 
   String _labelType(TransportType t) {
     switch (t) {
-      case TransportType.woroWoro: return 'Woro-Woro';
-      case TransportType.gbaka:    return 'Gbaka';
-      case TransportType.sotra:    return 'SOTRA';
-      case TransportType.yango:    return 'Yango';
+      case TransportType.woroWoro:
+        return 'Woro-Woro';
+      case TransportType.gbaka:
+        return 'Gbaka';
+      case TransportType.sotra:
+        return 'SOTRA';
+      case TransportType.yango:
+        return 'Yango';
     }
   }
 
   Color _couleurType(TransportType t) {
     switch (t) {
-      case TransportType.woroWoro: return const Color(0xFFFF6B2B);
-      case TransportType.gbaka:    return const Color(0xFF00C896);
-      case TransportType.sotra:    return const Color(0xFF2196F3);
-      case TransportType.yango:    return const Color(0xFFFFCC00);
+      case TransportType.woroWoro:
+        return const Color(0xFFFF6B2B);
+      case TransportType.gbaka:
+        return const Color(0xFF00C896);
+      case TransportType.sotra:
+        return const Color(0xFF2196F3);
+      case TransportType.yango:
+        return const Color(0xFFFFCC00);
     }
   }
 
@@ -102,8 +118,8 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
           ),
           backgroundColor: const Color(0xFF00C896),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     } else {
@@ -112,8 +128,8 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
           content: const Text('❌ Erreur — vérifie ta connexion.'),
           backgroundColor: Colors.red.shade800,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
@@ -127,7 +143,9 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-        20, 20, 20,
+        20,
+        20,
+        20,
         MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       child: Column(
@@ -137,7 +155,8 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
           // Handle
           Center(
             child: Container(
-              width: 36, height: 4,
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
                 color: widget.isNight ? Colors.white24 : Colors.black12,
                 borderRadius: BorderRadius.circular(2),
@@ -162,7 +181,10 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Signaler un arrêt',
+                  Text(
+                      _isProbleme
+                          ? 'Signaler un problème'
+                          : 'Signaler un arrêt',
                       style: TextStyle(
                           color: _textColor,
                           fontSize: 18,
@@ -178,11 +200,9 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
           const SizedBox(height: 20),
 
           // Nom de l'arrêt
-          Text('Nom de l\'arrêt',
+          Text(_isProbleme ? 'Détail du problème' : 'Nom de l\'arrêt',
               style: TextStyle(
-                  color: _subColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600)),
+                  color: _subColor, fontSize: 11, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           Container(
             decoration: BoxDecoration(
@@ -194,11 +214,13 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
               controller: _nomController,
               style: TextStyle(color: _textColor),
               decoration: InputDecoration(
-                hintText: 'Ex: Carrefour CHU, Marché Cocody...',
+                hintText: _isProbleme
+                    ? 'Ex: Arrêt dangereux, manque de signalisation...'
+                    : 'Ex: Carrefour CHU, Marché Cocody...',
                 hintStyle: TextStyle(color: _subColor, fontSize: 13),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 14),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               ),
               textCapitalization: TextCapitalization.words,
             ),
@@ -208,9 +230,7 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
           // Type de transport
           Text('Type de transport',
               style: TextStyle(
-                  color: _subColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600)),
+                  color: _subColor, fontSize: 11, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Row(
             children: TransportType.values.map((type) {
@@ -227,9 +247,7 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                     margin: const EdgeInsets.symmetric(horizontal: 3),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: selected
-                          ? couleur.withAlpha(38)
-                          : _surfaceColor,
+                      color: selected ? couleur.withAlpha(38) : _surfaceColor,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: selected ? couleur : Colors.transparent,
@@ -316,8 +334,7 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
             decoration: BoxDecoration(
               color: const Color(0xFF2196F3).withAlpha(20),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: const Color(0xFF2196F3).withAlpha(51)),
+              border: Border.all(color: const Color(0xFF2196F3).withAlpha(51)),
             ),
             child: Row(
               children: [
@@ -326,10 +343,11 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Cet arrêt sera visible en attente de validation '
-                    'par la communauté.',
-                    style: TextStyle(
-                        color: _subColor, fontSize: 11, height: 1.4),
+                    _isProbleme
+                        ? 'Votre signalement sera visible en attente de validation par la communauté.'
+                        : 'Cet arrêt sera visible en attente de validation par la communauté.',
+                    style:
+                        TextStyle(color: _subColor, fontSize: 11, height: 1.4),
                   ),
                 ),
               ],
@@ -351,9 +369,8 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                         Color(0xFFFF8C55),
                       ])
                     : null,
-                color: _nomController.text.trim().isEmpty
-                    ? _surfaceColor
-                    : null,
+                color:
+                    _nomController.text.trim().isEmpty ? _surfaceColor : null,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: _nomController.text.trim().isNotEmpty
                     ? [
@@ -368,9 +385,11 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
               child: _isLoading
                   ? const Center(
                       child: SizedBox(
-                        width: 20, height: 20,
+                        width: 20,
+                        height: 20,
                         child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2,
+                          color: Colors.white,
+                          strokeWidth: 2,
                         ),
                       ),
                     )
@@ -378,7 +397,9 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.add_location_alt,
+                          _isProbleme
+                              ? Icons.report_problem
+                              : Icons.add_location_alt,
                           color: _nomController.text.trim().isNotEmpty
                               ? Colors.white
                               : _subColor,
@@ -386,7 +407,9 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Signaler cet arrêt',
+                          _isProbleme
+                              ? 'Envoyer le signalement'
+                              : 'Signaler cet arrêt',
                           style: TextStyle(
                             color: _nomController.text.trim().isNotEmpty
                                 ? Colors.white

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../services/places_service.dart';
@@ -28,6 +30,8 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
   List<SuggestionLocale> _suggestionsFiltrees = [];
   bool _isLoading = false;
   bool _showResults = false;
+  Timer? _searchDebounce;
+  int _searchRequestId = 0;
 
   // Couleurs selon thème
   Color get _bgColor =>
@@ -68,24 +72,33 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
     });
   }
 
-  Future<void> _onChanged(String input) async {
+  void _onChanged(String input) {
     _afficherSuggestions(input);
+    _searchDebounce?.cancel();
 
     if (input.length < 2) {
-      setState(() => _predictions = []);
+      setState(() {
+        _predictions = [];
+        _isLoading = false;
+      });
       return;
     }
 
-    setState(() => _isLoading = true);
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () async {
+      final requestId = ++_searchRequestId;
+      if (!mounted) return;
+      setState(() => _isLoading = true);
 
-    final predictions = await PlacesService.autocomplete(
-      input: input,
-      sessionToken: _sessionToken,
-    );
+      final predictions = await PlacesService.autocomplete(
+        input: input,
+        sessionToken: _sessionToken,
+      );
 
-    setState(() {
-      _predictions = predictions;
-      _isLoading = false;
+      if (!mounted || requestId != _searchRequestId) return;
+      setState(() {
+        _predictions = predictions;
+        _isLoading = false;
+      });
     });
   }
 
@@ -350,6 +363,7 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();

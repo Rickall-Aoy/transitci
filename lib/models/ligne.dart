@@ -1,4 +1,5 @@
 ﻿import 'gare.dart';
+import '../services/location_service.dart';
 
 class Arret {
   final String nom;
@@ -107,11 +108,12 @@ class Ligne {
   }
 
   double _distance(double lat1, double lon1, double lat2, double lon2) {
-    const r = 6371000.0;
-    final dLat = (lat2 - lat1) * 3.141592653589793 / 180;
-    final dLon = (lon2 - lon1) * 3.141592653589793 / 180;
-    final a = dLat * dLat + dLon * dLon;
-    return r * a;
+    return LocationService.distanceEnMetres(
+      lat1: lat1,
+      lon1: lon1,
+      lat2: lat2,
+      lon2: lon2,
+    );
   }
 
   static TransportType _typeFromString(String type) {

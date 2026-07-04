@@ -125,6 +125,8 @@ class _SearchScreenState extends State<SearchScreen> {
             destination: detail.name.isNotEmpty ? detail.name : detail.address,
             destLat: detail.latitude,
             destLon: detail.longitude,
+            userLat: position.latitude,
+            userLon: position.longitude,
           ),
         ),
       );

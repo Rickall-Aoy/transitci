@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import '../models/gare.dart';
 import '../models/ligne.dart';
 import '../models/trajet.dart';
@@ -15,20 +14,23 @@ class RoutingService {
     required int heure,
   }) {
     final List<Trajet> trajets = [];
-
-    debugPrint('📍 User: $userLat, $userLon');
-    debugPrint('🎯 Dest: $destLat, $destLon');
-    debugPrint('🚌 Lignes disponibles: ${lignes.length}');
-
-    debugPrint('── Vérification lignes ──');
-    for (final ligne in lignes) {
-      final desservDepart = ligne.peutDesservir(userLat, userLon);
-      final desservDest = ligne.peutDesservir(destLat, destLon);
-      debugPrint('${ligne.nom} | Départ: $desservDepart | Dest: $desservDest');
-    }
+    final lignesDepart = _lignesProches(
+      lignes: lignes,
+      lat: userLat,
+      lon: userLon,
+      limit: 24,
+    );
+    final lignesDestination = _lignesProches(
+      lignes: lignes,
+      lat: destLat,
+      lon: destLon,
+      limit: 24,
+    );
+    final lignesDirectes =
+        _dedupeLignes([...lignesDepart, ...lignesDestination]);
 
     // ── 1. Trajets directs (1 seule ligne) ──
-    for (final ligne in lignes) {
+    for (final ligne in lignesDirectes) {
       final t = _trajetDirect(
         userLat: userLat, userLon: userLon,
         destLat: destLat, destLon: destLon,
@@ -37,11 +39,9 @@ class RoutingService {
       if (t != null) trajets.add(t);
     }
 
-    debugPrint('✅ Directs: ${trajets.length}');
-
     // ── 2. Trajets avec 1 correspondance ──
-    for (final l1 in lignes) {
-      for (final l2 in lignes) {
+    for (final l1 in lignesDepart) {
+      for (final l2 in lignesDestination) {
         if (l1.id == l2.id) continue;
         final t = _trajetCorrespondance(
           userLat: userLat, userLon: userLon,
@@ -52,8 +52,6 @@ class RoutingService {
       }
     }
 
-    debugPrint('✅ Avec correspondance: ${trajets.length}');
-
     // ── 3. Trajets avec 2 correspondances (> 8km) ──
     final distTotale = LocationService.distanceEnMetres(
       lat1: userLat, lon1: userLon,
@@ -61,9 +59,16 @@ class RoutingService {
     );
 
     if (distTotale > 8000) {
-      for (final l1 in lignes) {
-        for (final l2 in lignes) {
-          for (final l3 in lignes) {
+      final lignesIntermediaires = _dedupeLignes(lignes)
+          .where((ligne) =>
+              !lignesDepart.any((l) => l.id == ligne.id) &&
+              !lignesDestination.any((l) => l.id == ligne.id))
+          .take(32)
+          .toList();
+
+      for (final l1 in lignesDepart.take(12)) {
+        for (final l2 in lignesIntermediaires) {
+          for (final l3 in lignesDestination.take(12)) {
             if (l1.id == l2.id || l2.id == l3.id || l1.id == l3.id) continue;
             final t = _trajetDoubleCorrespondance(
               userLat: userLat, userLon: userLon,
@@ -76,11 +81,43 @@ class RoutingService {
       }
     }
 
-    debugPrint('✅ Total trajets: ${trajets.length}');
-
     // Trier et garder les 3 meilleurs
     trajets.sort((a, b) => a.score.compareTo(b.score));
     return trajets.take(3).toList();
+  }
+
+  static List<Ligne> _lignesProches({
+    required List<Ligne> lignes,
+    required double lat,
+    required double lon,
+    required int limit,
+  }) {
+    final scored = lignes.map((ligne) {
+      final arret = ligne.arretLePlusProche(lat, lon);
+      final distance = LocationService.distanceEnMetres(
+        lat1: lat,
+        lon1: lon,
+        lat2: arret.latitude,
+        lon2: arret.longitude,
+      );
+      return MapEntry(ligne, distance);
+    }).toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+
+    return scored
+        .where((entry) => entry.value <= 5000)
+        .take(limit)
+        .map((entry) => entry.key)
+        .toList();
+  }
+
+  static List<Ligne> _dedupeLignes(List<Ligne> lignes) {
+    final seen = <String>{};
+    final result = <Ligne>[];
+    for (final ligne in lignes) {
+      if (seen.add(ligne.id)) result.add(ligne);
+    }
+    return result;
   }
 
   // ── Trajet direct ──

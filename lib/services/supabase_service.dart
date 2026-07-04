@@ -1,96 +1,185 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/ligne.dart';
+import '../models/gare.dart';
 
-/// Wrapper utilitaire pour quelques appels Supabase récurrents.
 class SupabaseService {
   static final _client = Supabase.instance.client;
-  static final List<Map<String, dynamic>> _demoLignes = [
-    {
-      'id': 'ligne-demo-1',
-      'nom': 'Ligne 1 – Centre / Plateau',
-      'type': 'urbain',
-      'depart': 'Centre',
-      'arrivee': 'Plateau',
-    },
-    {
-      'id': 'ligne-demo-2',
-      'nom': 'Ligne 2 – Cocody / Yopougon',
-      'type': 'urbain',
-      'depart': 'Cocody',
-      'arrivee': 'Yopougon',
-    },
-  ];
 
-  static final List<Map<String, dynamic>> _demoVehicles = [
-    {
-      'id': 'vehicle-demo-1',
-      'chauffeur_id': 'demo-chauffeur',
-      'ligne_id': 'ligne-demo-1',
-      'latitude': 5.3570,
-      'longitude': -4.0120,
-      'vitesse': 28,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    },
-  ];
-
-  /// Récupère la liste des lignes.
-  /// Retourne une liste de maps contenant `id`, `nom`, `type`, `depart`, `arrivee`.
-  static Future<List<Map<String, dynamic>>> getLignes() async {
+  // ── Lignes depuis Supabase (toutes) ──
+  static Future<List<Ligne>> getLignes() async {
     try {
-      final res = await _client.from('lignes').select('id,nom,type,depart,arrivee');
-      final List data = res as List<dynamic>? ?? [];
-      return data.cast<Map<String, dynamic>>();
-    } catch (e) {
-      // ignore: avoid_print
-      print('SupabaseService.getLignes error: $e');
-      return List<Map<String, dynamic>>.from(_demoLignes);
-    }
-  }
+      final response = await _client
+          .from('lignes')
+          .select()
+          .not('terminus_depart_lat', 'is', null)
+          .not('terminus_arrivee_lat', 'is', null);
 
-  /// Upsert (insert ou update) une ligne de `vehicules_live`.
-  /// Le `data` doit contenir au minimum `chauffeur_id`, `latitude`, `longitude`.
-  static Future<bool> upsertVehiculeLive(Map<String, dynamic> data) async {
-    try {
-      await _client.from('vehicules_live').upsert(data);
-      return true;
-    } catch (e) {
-      // ignore: avoid_print
-      print('SupabaseService.upsertVehiculeLive error: $e');
-      final updated = Map<String, dynamic>.from(data);
-      final existingIndex = _demoVehicles.indexWhere(
-        (vehicle) => vehicle['chauffeur_id'] == updated['chauffeur_id'],
-      );
-      if (existingIndex >= 0) {
-        _demoVehicles[existingIndex] = updated;
-      } else {
-        _demoVehicles.add(updated);
+      final rows = response as List;
+
+      // Diagnostic : combien de lignes par type arrivent depuis Supabase,
+      // AVANT tout filtrage supplémentaire
+      final countsParType = <String, int>{};
+      for (final l in rows) {
+        final t = l['type']?.toString() ?? 'null';
+        countsParType[t] = (countsParType[t] ?? 0) + 1;
       }
-      return true;
-    }
-  }
+      debugPrint('📊 Lignes Supabase reçues (avec coords non-null): $countsParType');
 
-  /// Supprime l'enregistrement `vehicules_live` pour un `chauffeur_id` donné.
-  static Future<bool> deleteVehiculeByChauffeur(String chauffeurId) async {
-    try {
-      await _client.from('vehicules_live').delete().eq('chauffeur_id', chauffeurId);
-      return true;
+      final lignes = <Ligne>[];
+      for (final l in rows) {
+        try {
+          final ligne = Ligne(
+            id: l['id']?.toString() ?? '',
+            nom: l['nom']?.toString() ?? '',
+            type: _typeFromString(l['type']?.toString() ?? ''),
+            couleurVehicule: l['reseau']?.toString() ?? 'standard',
+            prix: _toInt(l['prix'], fallback: 200),
+            conseil: _conseilParType(l['type']?.toString() ?? ''),
+            terminusDepart: Arret(
+              nom: l['depart']?.toString() ?? '',
+              latitude: _toDouble(l['terminus_depart_lat']),
+              longitude: _toDouble(l['terminus_depart_lng']),
+            ),
+            terminusArrivee: Arret(
+              nom: l['arrivee']?.toString() ?? '',
+              latitude: _toDouble(l['terminus_arrivee_lat']),
+              longitude: _toDouble(l['terminus_arrivee_lng']),
+            ),
+            arretsPossibles: const [],
+          );
+
+          if (ligne.terminusDepart.latitude == 0 ||
+              ligne.terminusArrivee.latitude == 0) {
+            debugPrint('⚠️ Ligne ignorée (coords à 0) id=${l['id']} nom=${l['nom']}');
+            continue;
+          }
+
+          lignes.add(ligne);
+        } catch (e) {
+          // Une ligne malformée ne doit pas faire échouer tout le batch
+          debugPrint('⚠️ Ligne Supabase ignorée (id=${l['id']}): $e');
+        }
+      }
+
+      debugPrint('✅ ${lignes.length}/${rows.length} lignes Supabase exploitables');
+      return lignes;
     } catch (e) {
-      // ignore: avoid_print
-      print('SupabaseService.deleteVehiculeByChauffeur error: $e');
-      _demoVehicles.removeWhere((vehicle) => vehicle['chauffeur_id'] == chauffeurId);
-      return true;
+      debugPrint('❌ Erreur getLignes (requête/connexion): $e');
+      return [];
     }
   }
 
-  /// Récupère toutes les positions de `vehicules_live`.
+  // ── Lignes SOTRA brutes pour alimenter les marqueurs d'arrêts Supabase ──
+  static Future<List<Map<String, dynamic>>> getLignesSotra() async {
+    try {
+      final response = await _client
+          .from('lignes')
+          .select(
+            'id, nom, depart, arrivee, type, prix, terminus_depart_lat, terminus_depart_lng',
+          )
+          .eq('type', 'sotra')
+          .not('terminus_depart_lat', 'is', null)
+          .not('terminus_depart_lng', 'is', null);
+
+      final rows = List<Map<String, dynamic>>.from(response);
+      debugPrint('📊 Lignes SOTRA Supabase avec coords: ${rows.length}');
+
+      return rows.map((ligne) {
+        final depart = ligne['depart']?.toString() ?? '';
+        return {
+          ...ligne,
+          'lat_depart': _toDouble(ligne['terminus_depart_lat']),
+          'lon_depart': _toDouble(ligne['terminus_depart_lng']),
+          'terminus_depart': depart,
+          'prix': _toInt(ligne['prix'], fallback: 200),
+        };
+      }).toList();
+    } catch (e) {
+      debugPrint('❌ Erreur getLignesSotra: $e');
+      return [];
+    }
+  }
+
+  // ── Véhicules live ──
   static Future<List<Map<String, dynamic>>> getVehiculesLive() async {
     try {
-      final res = await _client.from('vehicules_live').select('id,chauffeur_id,ligne_id,latitude,longitude,vitesse,updated_at');
-      final List data = res as List<dynamic>? ?? [];
-      return data.cast<Map<String, dynamic>>();
+      final response = await _client
+          .from('vehicules_live')
+          .select('*, chauffeurs(nom, type_vehicule), lignes(nom, type)')
+          .gte(
+              'updated_at',
+              DateTime.now()
+                  .subtract(const Duration(minutes: 5))
+                  .toIso8601String());
+      return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      // ignore: avoid_print
-      print('SupabaseService.getVehiculesLive error: $e');
-      return List<Map<String, dynamic>>.from(_demoVehicles);
+      debugPrint('❌ Erreur getVehiculesLive: $e');
+      return [];
+    }
+  }
+
+  // ── Signaler un arrêt ──
+  static Future<bool> signalerArret({
+    required String nom,
+    required double latitude,
+    required double longitude,
+    required String typeTransport,
+    String? ligneId,
+  }) async {
+    try {
+      await _client.from('arrets_signales').insert({
+        'nom': nom,
+        'latitude': latitude,
+        'longitude': longitude,
+        'type_transport': typeTransport,
+        'ligne_id': ligneId,
+        'statut': 'en_attente',
+      });
+      return true;
+    } catch (e) {
+      debugPrint('❌ Erreur signalerArret: $e');
+      return false;
+    }
+  }
+
+  // ── Helpers ──
+  static double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static int _toInt(dynamic value, {required int fallback}) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  static TransportType _typeFromString(String type) {
+    switch (type) {
+      case 'woro_woro':
+        return TransportType.woroWoro;
+      case 'gbaka':
+        return TransportType.gbaka;
+      case 'warren':
+        return TransportType.woroWoro; // warren = woro-woro
+      case 'sotra':
+        return TransportType.sotra;
+      default:
+        debugPrint('⚠️ Type de ligne inconnu en base: "$type" — fallback sotra');
+        return TransportType.sotra;
+    }
+  }
+
+  static String _conseilParType(String type) {
+    switch (type) {
+      case 'woro_woro':
+      case 'warren':
+        return 'Dites votre arrêt au chauffeur avant de monter.';
+      case 'gbaka':
+        return 'Criez votre arrêt quand vous approchez.';
+      default:
+        return 'Bus SOTRA — arrêts fixes aux panneaux.';
     }
   }
 }

@@ -32,3 +32,8 @@ build/
 .flutter-plugins
 .flutter-plugins-dependencies
 .metadata
+
+# Local env (do not commit)
+.env.dev
+lib/config/.env.dart
+!.env.dev.example

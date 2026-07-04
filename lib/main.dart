@@ -4,22 +4,26 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_theme.dart';
 import 'config/supabase_config.dart';
 import 'screens/chauffeur/chauffeur_navigation.dart';
-import 'screens/chauffeur/home_screen.dart' as chauffeur;
 import 'screens/chauffeur/login_screen.dart';
 import 'screens/chauffeur/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/passager/map_screen.dart';
 import 'screens/passager/search_screen.dart';
-import 'services/gtfs_loader.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await GtfsLoader.instance.initialize();
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.publishableKey,
   );
+
+  if (SupabaseConfig.isConfigured) {
+    debugPrint('✅ Supabase connecté');
+  } else {
+    debugPrint('⚠️ Supabase non configuré — mode mock/local');
+  }
+
   runApp(const TransitCIApp());
 }
 
