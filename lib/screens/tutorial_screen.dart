@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../services/settings_service.dart';
+import '../app_theme.dart';
 
 class TutorialScreen extends StatefulWidget {
   final bool fromSettings;
@@ -25,7 +26,7 @@ class _TutorialScreenState extends State<TutorialScreen>
 
   final List<TutorialPage> _pages = [
     const TutorialPage(
-      emoji: '🗺️',
+      emoji: '',
       titre: 'Bienvenue sur TransitCI',
       description:
           'L\'app qui te guide dans les transports d\'Abidjan. '
@@ -33,13 +34,13 @@ class _TutorialScreenState extends State<TutorialScreen>
       couleur: Color(0xFFFF6B2B),
       illustration: _IllustrationAccueil(),
       astuces: [
-        '🟠 Orange = Woro-Woro',
-        '🟢 Vert = Gbaka',
-        '🔵 Bleu = SOTRA',
+        'Orange = Woro-Woro',
+        'Vert = Gbaka',
+        'Bleu = SOTRA',
       ],
     ),
     const TutorialPage(
-      emoji: '📍',
+      emoji: '',
       titre: 'Ta position en temps réel',
       description:
           'TransitCI détecte automatiquement où tu es. '
@@ -47,13 +48,13 @@ class _TutorialScreenState extends State<TutorialScreen>
       couleur: Color(0xFF00C896),
       illustration: _IllustrationGPS(),
       astuces: [
-        '📡 GPS haute précision',
-        '🚶 Distance à pied calculée',
-        '⏱️ Temps de marche estimé',
+        'GPS haute précision',
+        'Distance à pied calculée',
+        'Temps de marche estimé',
       ],
     ),
     const TutorialPage(
-      emoji: '🔍',
+      emoji: '',
       titre: 'Cherche ta destination',
       description:
           'Tape où tu veux aller. L\'algo analyse toutes les options '
@@ -61,13 +62,13 @@ class _TutorialScreenState extends State<TutorialScreen>
       couleur: Color(0xFF2196F3),
       illustration: _IllustrationRecherche(),
       astuces: [
-        '💰 Mode Économique',
-        '⚡ Mode Rapide',
-        '⚖️ Mode Équilibré',
+        'Mode Economique',
+        'Mode Rapide',
+        'Mode Equilibre',
       ],
     ),
     const TutorialPage(
-      emoji: '🚕',
+      emoji: '',
       titre: 'Compare et choisis',
       description:
           'Chaque option affiche le prix exact, le temps total '
@@ -75,13 +76,13 @@ class _TutorialScreenState extends State<TutorialScreen>
       couleur: Color(0xFFFF6B2B),
       illustration: _IllustrationResultats(),
       astuces: [
-        '⭐ Le meilleur choix mis en avant',
-        '🔄 Filtres en temps réel',
-        '👆 Tape pour naviguer',
+        'Le meilleur choix mis en avant',
+        'Filtres en temps réel',
+        'Tape pour naviguer',
       ],
     ),
     const TutorialPage(
-      emoji: '🧭',
+      emoji: '',
       titre: 'Guidage jusqu\'à la gare',
       description:
           'Une fois ton transport choisi, suis l\'itinéraire à pied '
@@ -89,9 +90,9 @@ class _TutorialScreenState extends State<TutorialScreen>
       couleur: Color(0xFF00C896),
       illustration: _IllustrationNavigation(),
       astuces: [
-        '🛣️ Itinéraire pédestre',
-        '📌 Marqueurs de départ et arrivée',
-        '🌙 Mode nuit automatique',
+        'Itinéraire pédestre',
+        'Marqueurs de départ et arrivée',
+        'Mode nuit automatique',
       ],
     ),
   ];
@@ -132,12 +133,9 @@ class _TutorialScreenState extends State<TutorialScreen>
     return h >= 19 || h < 6;
   }
 
-  Color get _bgColor =>
-      _isNight ? const Color(0xFF0A0A0A) : const Color(0xFFF8F8F8);
-  Color get _textColor =>
-      _isNight ? Colors.white : const Color(0xFF0A0A0A);
-  Color get _subTextColor =>
-      _isNight ? Colors.white54 : Colors.grey.shade500;
+  Color get _bgColor => _isNight ? AppTheme.darkBg : const Color(0xFFF8F8F8);
+  Color get _textColor => _isNight ? AppTheme.darkTextPrimary : const Color(0xFF0A0A0A);
+  Color get _subTextColor => _isNight ? AppTheme.darkTextSecondary : Colors.grey.shade600;
 
   void _nextPage() {
     HapticFeedback.lightImpact();
@@ -164,10 +162,8 @@ class _TutorialScreenState extends State<TutorialScreen>
         opacity: _entryAnimation,
         child: Column(
           children: [
-            // ── Header ──
             _buildHeader(),
 
-            // ── Pages ──
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -182,7 +178,6 @@ class _TutorialScreenState extends State<TutorialScreen>
               ),
             ),
 
-            // ── Footer ──
             _buildFooter(),
           ],
         ),
@@ -196,20 +191,18 @@ class _TutorialScreenState extends State<TutorialScreen>
           20, MediaQuery.of(context).padding.top + 16, 20, 16),
       child: Row(
         children: [
-          // Bouton fermer
           GestureDetector(
             onTap: _terminer,
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _isNight ? Colors.white10 : Colors.grey.shade200,
+                color: _isNight ? AppTheme.darkStroke : Colors.grey.shade200,
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.close, color: _textColor, size: 18),
             ),
           ),
           const Spacer(),
-          // Step indicator texte
           Text(
             '${_currentPage + 1} / ${_pages.length}',
             style: TextStyle(
@@ -228,7 +221,6 @@ class _TutorialScreenState extends State<TutorialScreen>
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
-          // ── Illustration animée ──
           Expanded(
             flex: 5,
             child: AnimatedBuilder(
@@ -240,9 +232,9 @@ class _TutorialScreenState extends State<TutorialScreen>
               child: Container(
                 margin: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: page.couleur.withOpacity(0.08),
+                  color: page.couleur.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: page.couleur.withOpacity(0.2)),
+                  border: Border.all(color: page.couleur.withValues(alpha: 0.2)),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(28),
@@ -252,7 +244,6 @@ class _TutorialScreenState extends State<TutorialScreen>
             ),
           ),
 
-          // ── Contenu ──
           Expanded(
             flex: 4,
             child: SingleChildScrollView(
@@ -282,7 +273,6 @@ class _TutorialScreenState extends State<TutorialScreen>
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Astuces — Fix overflow horizontal ──
                   Wrap(
                     alignment: WrapAlignment.center,
                     spacing: 6,
@@ -291,9 +281,9 @@ class _TutorialScreenState extends State<TutorialScreen>
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: page.couleur.withOpacity(0.1),
+                          color: page.couleur.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: page.couleur.withOpacity(0.25)),
+                          border: Border.all(color: page.couleur.withValues(alpha: 0.25)),
                         ),
                         child: Text(
                           a,
@@ -325,13 +315,12 @@ class _TutorialScreenState extends State<TutorialScreen>
           24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
       child: Column(
         children: [
-          // Page indicator
           SmoothPageIndicator(
             controller: _pageController,
             count: _pages.length,
             effect: ExpandingDotsEffect(
               activeDotColor: page.couleur,
-              dotColor: _isNight ? Colors.white24 : Colors.grey.shade300,
+              dotColor: _isNight ? AppTheme.darkStroke : Colors.grey.shade300,
               dotHeight: 8,
               dotWidth: 8,
               expansionFactor: 3,
@@ -339,10 +328,8 @@ class _TutorialScreenState extends State<TutorialScreen>
           ),
           const SizedBox(height: 24),
 
-          // Boutons
           Row(
             children: [
-              // Bouton précédent
               if (_currentPage > 0)
                 GestureDetector(
                   onTap: () {
@@ -356,9 +343,7 @@ class _TutorialScreenState extends State<TutorialScreen>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 20, vertical: 16),
                     decoration: BoxDecoration(
-                      color: _isNight
-                          ? Colors.white10
-                          : Colors.grey.shade200,
+                      color: _isNight ? AppTheme.darkSurfaceBright : Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(Icons.arrow_back,
@@ -368,7 +353,6 @@ class _TutorialScreenState extends State<TutorialScreen>
 
               if (_currentPage > 0) const SizedBox(width: 12),
 
-              // Bouton suivant / terminer
               Expanded(
                 child: GestureDetector(
                   onTap: _nextPage,
@@ -379,13 +363,13 @@ class _TutorialScreenState extends State<TutorialScreen>
                       gradient: LinearGradient(
                         colors: [
                           page.couleur,
-                          page.couleur.withOpacity(0.75),
+                          page.couleur.withValues(alpha: 0.75),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: page.couleur.withOpacity(0.4),
+                          color: page.couleur.withValues(alpha: 0.4),
                           blurRadius: 20,
                           offset: const Offset(0, 6),
                         ),
@@ -395,7 +379,7 @@ class _TutorialScreenState extends State<TutorialScreen>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          isLast ? 'C\'est parti ! 🚀' : 'Suivant',
+                          isLast ? 'C\'est parti !' : 'Suivant',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -418,17 +402,8 @@ class _TutorialScreenState extends State<TutorialScreen>
       ),
     );
   }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    _entryController.dispose();
-    _floatController.dispose();
-    super.dispose();
-  }
 }
 
-// ── Modèle de page ──
 class TutorialPage {
   final String emoji;
   final String titre;
@@ -446,8 +421,6 @@ class TutorialPage {
     required this.astuces,
   });
 }
-
-// ── Illustrations SVG custom ──
 
 class _IllustrationAccueil extends StatelessWidget {
   const _IllustrationAccueil();
@@ -467,20 +440,17 @@ class _AccueilPainter extends CustomPainter {
     final cx = size.width / 2;
     final cy = size.height / 2;
 
-    // Fond
-    paint.color = const Color(0xFFFF6B2B).withOpacity(0.05);
+    paint.color = const Color(0xFFFF6B2B).withValues(alpha: 0.05);
     canvas.drawCircle(Offset(cx, cy), size.width * 0.42, paint);
 
-    // Cercles concentriques
     paint.style = PaintingStyle.stroke;
     paint.strokeWidth = 1;
     for (int i = 1; i <= 3; i++) {
       paint.color =
-          const Color(0xFFFF6B2B).withOpacity(0.08 * i);
+          const Color(0xFFFF6B2B).withValues(alpha: 0.08 * i);
       canvas.drawCircle(Offset(cx, cy), size.width * 0.15 * i, paint);
     }
 
-    // Marqueurs de gares
     _drawMarker(canvas, Offset(cx - 70, cy - 40),
         const Color(0xFFFF6B2B), 18, paint);
     _drawMarker(canvas, Offset(cx + 50, cy - 60),
@@ -490,7 +460,6 @@ class _AccueilPainter extends CustomPainter {
     _drawMarker(canvas, Offset(cx - 40, cy + 60),
         const Color(0xFFFF6B2B), 12, paint);
 
-    // Point central (utilisateur)
     paint.style = PaintingStyle.fill;
     paint.color = Colors.white;
     canvas.drawCircle(Offset(cx, cy), 12, paint);
@@ -535,26 +504,23 @@ class _GPSPainter extends CustomPainter {
     final cx = size.width / 2;
     final cy = size.height / 2;
 
-    // Ondes GPS
     paint.style = PaintingStyle.stroke;
     paint.strokeWidth = 2;
     for (int i = 1; i <= 4; i++) {
       paint.color =
-          const Color(0xFF00C896).withOpacity(0.15 + i * 0.08);
+          const Color(0xFF00C896).withValues(alpha: 0.15 + i * 0.08);
       canvas.drawCircle(Offset(cx, cy), i * 30.0, paint);
     }
 
-    // Point GPS central
     paint.style = PaintingStyle.fill;
-    paint.color = const Color(0xFF00C896).withOpacity(0.2);
+    paint.color = const Color(0xFF00C896).withValues(alpha: 0.2);
     canvas.drawCircle(Offset(cx, cy), 28, paint);
     paint.color = const Color(0xFF00C896);
     canvas.drawCircle(Offset(cx, cy), 14, paint);
     paint.color = Colors.white;
     canvas.drawCircle(Offset(cx, cy), 6, paint);
 
-    // Lignes de rue
-    paint.color = const Color(0xFF00C896).withOpacity(0.2);
+    paint.color = const Color(0xFF00C896).withValues(alpha: 0.2);
     paint.strokeWidth = 4;
     paint.style = PaintingStyle.stroke;
     canvas.drawLine(Offset(0, cy), Offset(size.width, cy), paint);
@@ -569,21 +535,20 @@ class _IllustrationRecherche extends StatelessWidget {
   const _IllustrationRecherche();
   @override
   Widget build(BuildContext context) {
-    return ClipRRect( // ← empêche tout débordement
+    return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: Padding(
-        padding: const EdgeInsets.all(16), // ← réduit de 24 à 16
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min, // ← prend juste l'espace nécessaire
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Barre de recherche simulée
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), // ← réduit
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF2196F3).withOpacity(0.1),
+                color: const Color(0xFF2196F3).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2196F3).withOpacity(0.4)),
+                border: Border.all(color: const Color(0xFF2196F3).withValues(alpha: 0.4)),
               ),
               child: Row(
                 children: [
@@ -605,10 +570,9 @@ class _IllustrationRecherche extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 10), // ← réduit de 16 à 10
-            // Filtres simulés
+            const SizedBox(height: 10),
             Row(
-              children: ['💰 Économique', '⚡ Rapide', '⚖️ Équilibré']
+              children: ['Economique', 'Rapide', 'Equilibre']
                   .asMap()
                   .entries
                   .map((e) {
@@ -616,11 +580,11 @@ class _IllustrationRecherche extends StatelessWidget {
                 return Expanded(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 3),
-                    padding: const EdgeInsets.symmetric(vertical: 6), // ← réduit
+                    padding: const EdgeInsets.symmetric(vertical: 6),
                     decoration: BoxDecoration(
                       color: selected
                           ? const Color(0xFF2196F3)
-                          : const Color(0xFF2196F3).withOpacity(0.1),
+                          : const Color(0xFF2196F3).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -628,7 +592,7 @@ class _IllustrationRecherche extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: selected ? Colors.white : const Color(0xFF2196F3),
-                        fontSize: 8, // ← réduit de 9 à 8
+                        fontSize: 8,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -636,22 +600,21 @@ class _IllustrationRecherche extends StatelessWidget {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 10), // ← réduit de 16 à 10
-            // Résultats simulés — seulement 2 au lieu de 3
-            ...['🚕 Woro-Woro', '🚌 SOTRA']
+            const SizedBox(height: 10),
+            ...['Woro-Woro', 'SOTRA']
                 .asMap()
                 .entries
                 .map((e) {
               return Container(
-                margin: const EdgeInsets.only(bottom: 6), // ← réduit
-                padding: const EdgeInsets.all(8), // ← réduit de 10 à 8
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: const Color(0xFF2196F3)
-                      .withOpacity(e.key == 0 ? 0.15 : 0.06),
+                      .withValues(alpha: e.key == 0 ? 0.15 : 0.06),
                   borderRadius: BorderRadius.circular(10),
                   border: e.key == 0
                       ? Border.all(
-                          color: const Color(0xFF2196F3).withOpacity(0.5))
+                          color: const Color(0xFF2196F3).withValues(alpha: 0.5))
                       : null,
                 ),
                 child: Row(
@@ -666,7 +629,7 @@ class _IllustrationRecherche extends StatelessWidget {
                           color: const Color(0xFF2196F3),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Text('⭐ Meilleur',
+                        child: const Text('Meilleur',
                             style: TextStyle(color: Colors.white, fontSize: 8)),
                       ),
                   ],
@@ -689,34 +652,33 @@ class _IllustrationResultats extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _buildMockCard('🚕', 'Woro-Woro',
+          _buildMockCard('Woro-Woro',
               '300 FCFA', '42 min', const Color(0xFFFF6B2B), true),
           const SizedBox(height: 10),
-          _buildMockCard('🚌', 'SOTRA',
+          _buildMockCard('SOTRA',
               '200 FCFA', '55 min', const Color(0xFF2196F3), false),
           const SizedBox(height: 10),
-          _buildMockCard('🚐', 'Gbaka',
+          _buildMockCard('Gbaka',
               '250 FCFA', '50 min', const Color(0xFF00C896), false),
         ],
       ),
     );
   }
 
-  Widget _buildMockCard(String emoji, String label, String prix,
+  Widget _buildMockCard(String label, String prix,
       String temps, Color color, bool best) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: color.withOpacity(best ? 0.6 : 0.2),
+            color: color.withValues(alpha: best ? 0.6 : 0.2),
             width: best ? 1.5 : 1),
       ),
       child: Row(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: 10),
+          const Spacer(),
           Text(label,
               style: TextStyle(
                   color: color,
@@ -753,7 +715,6 @@ class _NavPainter extends CustomPainter {
     final paint = Paint();
     final cx = size.width / 2;
 
-    // Route courbe
     final path = Path()
       ..moveTo(cx - 60, size.height * 0.8)
       ..cubicTo(
@@ -762,26 +723,22 @@ class _NavPainter extends CustomPainter {
         cx + 60, size.height * 0.2,
       );
 
-    // Contour blanc
     paint.style = PaintingStyle.stroke;
     paint.strokeWidth = 12;
-    paint.color = Colors.white.withOpacity(0.3);
+    paint.color = _isNight ? AppTheme.darkStroke : Colors.white.withValues(alpha: 0.3);
     paint.strokeCap = StrokeCap.round;
     canvas.drawPath(path, paint);
 
-    // Ligne principale orange
     paint.strokeWidth = 6;
     paint.color = const Color(0xFF00C896);
     canvas.drawPath(path, paint);
 
-    // Point départ
     paint.style = PaintingStyle.fill;
     paint.color = const Color(0xFF2196F3);
     canvas.drawCircle(Offset(cx - 60, size.height * 0.8), 10, paint);
     paint.color = Colors.white;
     canvas.drawCircle(Offset(cx - 60, size.height * 0.8), 5, paint);
 
-    // Point arrivée (marqueur)
     paint.color = const Color(0xFF00C896);
     final markerPath = Path()
       ..addOval(Rect.fromCircle(
@@ -794,6 +751,11 @@ class _NavPainter extends CustomPainter {
     paint.color = Colors.white;
     canvas.drawCircle(
         Offset(cx + 60, size.height * 0.2), 6, paint);
+  }
+
+  bool get _isNight {
+    final h = DateTime.now().hour;
+    return h >= 19 || h < 6;
   }
 
   @override

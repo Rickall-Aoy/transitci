@@ -31,6 +31,15 @@ class Arret {
       };
 }
 
+/// Résultat d'une recherche d'arrêt le plus proche, avec sa position
+/// dans la séquence ordonnée de la ligne (utile pour valider le sens).
+class ArretAvecIndex {
+  final Arret arret;
+  final int index;
+
+  const ArretAvecIndex({required this.arret, required this.index});
+}
+
 class Ligne {
   final String id;
   final String nom;
@@ -86,6 +95,9 @@ class Ligne {
         'conseil': conseil,
       };
 
+  /// Séquence ORDONNÉE et dans le sens réel de circulation de la ligne.
+  /// Ne jamais mélanger deux directions dans une même instance de Ligne —
+  /// créer deux Ligne distinctes (aller / retour) à la source si besoin.
   List<Arret> get tousLesArrets => [
         terminusDepart,
         ...arretsPossibles,
@@ -99,12 +111,29 @@ class Ligne {
     });
   }
 
+  /// Conservé pour compatibilité — préférer [arretLePlusProcheAvecIndex]
+  /// partout où l'ordre de passage doit être vérifié (routing).
   Arret arretLePlusProche(double lat, double lon) {
-    return tousLesArrets.reduce((a, b) {
-      final dA = _distance(lat, lon, a.latitude, a.longitude);
-      final dB = _distance(lat, lon, b.latitude, b.longitude);
-      return dA < dB ? a : b;
-    });
+    return arretLePlusProcheAvecIndex(lat, lon).arret;
+  }
+
+  /// Retourne l'arrêt le plus proche ET sa position dans la séquence,
+  /// pour permettre de vérifier que deux arrêts sont dans le bon ordre
+  /// (départ AVANT arrivée) dans le sens réel de circulation.
+  ArretAvecIndex arretLePlusProcheAvecIndex(double lat, double lon) {
+    final tous = tousLesArrets;
+    var meilleurIndex = 0;
+    var meilleureDistance =
+        _distance(lat, lon, tous[0].latitude, tous[0].longitude);
+
+    for (int i = 1; i < tous.length; i++) {
+      final d = _distance(lat, lon, tous[i].latitude, tous[i].longitude);
+      if (d < meilleureDistance) {
+        meilleureDistance = d;
+        meilleurIndex = i;
+      }
+    }
+    return ArretAvecIndex(arret: tous[meilleurIndex], index: meilleurIndex);
   }
 
   double _distance(double lat1, double lon1, double lat2, double lon2) {

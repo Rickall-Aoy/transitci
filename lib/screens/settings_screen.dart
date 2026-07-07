@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/settings_service.dart';
+import '../app_theme.dart';
 import 'tutorial_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -30,14 +31,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return h >= 19 || h < 6;
   }
 
-  Color get _bgColor =>
-      _isNight ? const Color(0xFF0A0A0A) : const Color(0xFFF5F5F5);
-  Color get _cardColor =>
-      _isNight ? const Color(0xFF161616) : Colors.white;
-  Color get _textColor =>
-      _isNight ? Colors.white : const Color(0xFF0A0A0A);
-  Color get _subTextColor =>
-      _isNight ? Colors.white54 : Colors.grey.shade500;
+  Color get _bgColor => _isNight ? AppTheme.darkBg : const Color(0xFFF5F5F5);
+  Color get _cardColor => _isNight ? AppTheme.darkSurfaceBright : Colors.white;
+  Color get _textColor => _isNight ? AppTheme.darkTextPrimary : const Color(0xFF0A0A0A);
+  Color get _subTextColor => _isNight ? AppTheme.darkTextSecondary : Colors.grey.shade600;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _buildSection('🎨 Apparence', [
+                _buildSection('Apparence', [
                   _buildToggle(
                     icon: Icons.brightness_auto,
                     titre: 'Thème automatique',
@@ -67,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 8),
 
-                _buildSection('ℹ️ À propos', [
+                _buildSection('A propos', [
                   _buildTile(
                     icon: Icons.play_circle_outline,
                     titre: 'Tutoriel',
@@ -105,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   _buildTile(
                     icon: Icons.favorite_outline,
-                    titre: 'Fait avec ❤️ à Abidjan',
+                    titre: 'Fait avec a Abidjan',
                     description: 'Par l\'équipe TransitCI',
                     couleur: const Color(0xFFFF6B2B),
                     onTap: () {},
@@ -127,7 +124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         color: _cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(_isNight ? 0.4 : 0.06),
+            color: _isNight ? AppTheme.darkStroke : Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -140,7 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _isNight ? Colors.white10 : Colors.grey.shade100,
+                color: _isNight ? AppTheme.darkStroke : Colors.grey.shade100,
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.arrow_back, color: _textColor, size: 20),
@@ -182,8 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black
-                    .withOpacity(_isNight ? 0.3 : 0.05),
+                color: _isNight ? AppTheme.darkStroke : Colors.black.withValues(alpha: 0.05),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -199,9 +195,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Divider(
                       height: 1,
                       indent: 56,
-                      color: _isNight
-                          ? Colors.white10
-                          : Colors.grey.shade100,
+                      color: _isNight ? AppTheme.darkStroke : Colors.grey.shade100,
                     ),
                 ],
               );
@@ -227,7 +221,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
-              color: couleur.withOpacity(0.15),
+              color: couleur.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: couleur, size: 18),
@@ -274,7 +268,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               width: 36, height: 36,
               decoration: BoxDecoration(
-                color: couleur.withOpacity(0.15),
+                color: couleur.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: couleur, size: 18),

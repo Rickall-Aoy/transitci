@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../models/ligne.dart';
 import '../models/gare.dart';
@@ -14,6 +15,7 @@ class GtfsLoader {
   Future<void> initialize() async {
     if (_lignes.isNotEmpty) return;
     _lignes = await _loadAllLines();
+    debugPrint('📊 GtfsLoader: ${_lignes.length} lignes construites');
   }
 
   Future<List<Ligne>> _loadAllLines() async {
@@ -38,6 +40,8 @@ class GtfsLoader {
     }
 
     final lignes = <Ligne>[];
+    int ignoreesCourtes = 0;
+
     for (final route in routes) {
       final routeId = route['route_id']!;
       final name = route['route_long_name'] ?? '';
@@ -59,47 +63,91 @@ class GtfsLoader {
       );
 
       final stops0 = tripStops[dir0['trip_id']] ?? [];
-      final stops1 = dir0['trip_id'] == dir1['trip_id']
-          ? stops0
-          : tripStops[dir1['trip_id']] ?? [];
+      final memeDirection = dir0['trip_id'] == dir1['trip_id'];
+      final stops1 =
+          memeDirection ? const <String>[] : (tripStops[dir1['trip_id']] ?? []);
 
-      if (stops0.isEmpty && stops1.isEmpty) continue;
-
-      final terminusDepart = stops0.isNotEmpty ? stops[stops0.first] : null;
-      final terminusArrivee = stops1.isNotEmpty ? stops[stops1.last] : null;
-
-      if (terminusDepart == null || terminusArrivee == null) continue;
-
-      final arretsPossibles = <Arret>[];
-      final seen = <String>{stops0.first, stops1.last};
-      for (final sid in stops0) {
-        if (!seen.contains(sid) && stops.containsKey(sid)) {
-          seen.add(sid);
-          arretsPossibles.add(stops[sid]!);
-        }
-      }
-      for (final sid in stops1) {
-        if (!seen.contains(sid) && stops.containsKey(sid)) {
-          seen.add(sid);
-          arretsPossibles.add(stops[sid]!);
-        }
-      }
-
-      lignes.add(Ligne(
-        id: routeId,
-        nom: name,
+      // Direction "aller" — toujours construite si des arrêts existent
+      final ligneAller = _construireLigneDirection(
+        routeId: routeId,
+        suffixe: 'A',
+        name: name,
         type: type,
-        terminusDepart: terminusDepart,
-        terminusArrivee: terminusArrivee,
-        arretsPossibles: arretsPossibles,
-        prix: type == TransportType.woroWoro ? 300 : 200,
-        couleurVehicule: '#1779C2',
-        conseil: type == TransportType.woroWoro
-            ? 'Dites votre arrêt au chauffeur avant de monter.'
-            : 'Demandez au chauffeur si il dessert votre arrêt.',
-      ));
+        sequenceStopIds: stops0,
+        stops: stops,
+      );
+      if (ligneAller != null) {
+        lignes.add(ligneAller);
+      } else if (stops0.isNotEmpty) {
+        ignoreesCourtes++;
+      }
+
+      // Direction "retour" — seulement si distincte de l'aller
+      if (stops1.isNotEmpty) {
+        final ligneRetour = _construireLigneDirection(
+          routeId: routeId,
+          suffixe: 'R',
+          name: name,
+          type: type,
+          sequenceStopIds: stops1,
+          stops: stops,
+        );
+        if (ligneRetour != null) {
+          lignes.add(ligneRetour);
+        } else {
+          ignoreesCourtes++;
+        }
+      }
     }
+
+    debugPrint(
+      '📊 GtfsLoader: ${lignes.length} lignes construites '
+      '(${ignoreesCourtes} directions ignorées car < 2 arrêts)',
+    );
+
     return lignes;
+  }
+
+  /// Construit une Ligne pour UN SEUL sens de circulation, en conservant
+  /// l'ordre réel de passage des arrêts (aucun mélange aller/retour).
+  Ligne? _construireLigneDirection({
+    required String routeId,
+    required String suffixe,
+    required String name,
+    required TransportType type,
+    required List<String> sequenceStopIds,
+    required Map<String, Arret> stops,
+  }) {
+    final sequence = <Arret>[];
+    String? dernierId;
+
+    for (final sid in sequenceStopIds) {
+      if (sid == dernierId) continue; // évite les doublons consécutifs (arrêt répété)
+      final arret = stops[sid];
+      if (arret != null) {
+        sequence.add(arret);
+        dernierId = sid;
+      }
+    }
+
+    if (sequence.length < 2) return null;
+
+    final arretsPossibles = sequence.sublist(1, sequence.length - 1);
+    final nomDirection = suffixe == 'A' ? name : '$name (retour)';
+
+    return Ligne(
+      id: '${routeId}_$suffixe',
+      nom: nomDirection,
+      type: type,
+      terminusDepart: sequence.first,
+      terminusArrivee: sequence.last,
+      arretsPossibles: arretsPossibles,
+      prix: type == TransportType.woroWoro ? 300 : 200,
+      couleurVehicule: '#1779C2',
+      conseil: type == TransportType.woroWoro
+          ? 'Dites votre arrêt au chauffeur avant de monter.'
+          : 'Demandez au chauffeur si il dessert votre arrêt.',
+    );
   }
 
   TransportType _transportType(String agencyName) {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../models/gare.dart';
 import '../data/lignes_mock.dart';
 import '../services/crowdsourcing_service.dart';
+import '../app_theme.dart';
 
 enum SignalerArretMode { ajout, probleme }
 
@@ -32,12 +33,14 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
   String? _ligneSelectionnee;
   bool _isLoading = false;
 
-  Color get _bgColor => widget.isNight ? const Color(0xFF161616) : Colors.white;
+  Color get _bgColor => widget.isNight ? AppTheme.darkSurface : Colors.white;
   Color get _textColor =>
-      widget.isNight ? Colors.white : const Color(0xFF0A0A0A);
-  Color get _subColor => widget.isNight ? Colors.white54 : Colors.grey.shade500;
+      widget.isNight ? AppTheme.darkTextPrimary : const Color(0xFF0A0A0A);
+  Color get _subColor => widget.isNight ? AppTheme.darkTextSecondary : Colors.grey.shade600;
   Color get _surfaceColor =>
-      widget.isNight ? const Color(0xFF1E1E1E) : const Color(0xFFF5F5F5);
+      widget.isNight ? AppTheme.darkSurfaceBright : const Color(0xFFF5F5F5);
+  Color get _dividerColor =>
+      widget.isNight ? AppTheme.darkStroke : Colors.grey.shade200;
 
   String _formatCoord(double value) => value.toStringAsFixed(4);
 
@@ -46,13 +49,13 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
   String _emojiType(TransportType t) {
     switch (t) {
       case TransportType.woroWoro:
-        return '🚕';
+        return '';
       case TransportType.gbaka:
-        return '🚐';
+        return '';
       case TransportType.sotra:
-        return '🚌';
+        return '';
       case TransportType.yango:
-        return '🚗';
+        return '';
     }
   }
 
@@ -82,7 +85,6 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
     }
   }
 
-  // Lignes correspondant au type sélectionné
   List<String> get _lignesDuType => lignesMock
       .where((l) => l.type == _typeSelectionne)
       .map((l) => l.id)
@@ -112,8 +114,8 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
         SnackBar(
           content: const Row(
             children: [
-              Text('✅ '),
-              Text('Arrêt signalé ! Merci pour ta contribution.'),
+              Text(''),
+              Text('Arret signale ! Merci pour ta contribution.'),
             ],
           ),
           backgroundColor: const Color(0xFF00C896),
@@ -125,7 +127,7 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('❌ Erreur — vérifie ta connexion.'),
+          content: const Text('Erreur — verifie ta connexion.'),
           backgroundColor: Colors.red.shade800,
           behavior: SnackBarBehavior.floating,
           shape:
@@ -152,26 +154,24 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle
           Center(
             child: Container(
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: widget.isNight ? Colors.white24 : Colors.black12,
+                color: widget.isNight ? AppTheme.darkStroke : Colors.black12,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 20),
 
-          // Titre
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B2B).withAlpha(38),
+                  color: const Color(0xFFFF6B2B).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.add_location_alt,
@@ -183,8 +183,8 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                 children: [
                   Text(
                       _isProbleme
-                          ? 'Signaler un problème'
-                          : 'Signaler un arrêt',
+                          ? 'Signaler un probleme'
+                          : 'Signaler un arret',
                       style: TextStyle(
                           color: _textColor,
                           fontSize: 18,
@@ -199,8 +199,7 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
           ),
           const SizedBox(height: 20),
 
-          // Nom de l'arrêt
-          Text(_isProbleme ? 'Détail du problème' : 'Nom de l\'arrêt',
+          Text(_isProbleme ? 'Detail du probleme' : 'Nom de l\'arret',
               style: TextStyle(
                   color: _subColor, fontSize: 11, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
@@ -208,15 +207,15 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
             decoration: BoxDecoration(
               color: _surfaceColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white12),
+              border: Border.all(color: _dividerColor),
             ),
             child: TextField(
               controller: _nomController,
               style: TextStyle(color: _textColor),
               decoration: InputDecoration(
                 hintText: _isProbleme
-                    ? 'Ex: Arrêt dangereux, manque de signalisation...'
-                    : 'Ex: Carrefour CHU, Marché Cocody...',
+                    ? 'Ex: Arret dangereux, manque de signalisation...'
+                    : 'Ex: Carrefour CHU, Marche Cocody...',
                 hintStyle: TextStyle(color: _subColor, fontSize: 13),
                 border: InputBorder.none,
                 contentPadding:
@@ -227,7 +226,6 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
           ),
           const SizedBox(height: 16),
 
-          // Type de transport
           Text('Type de transport',
               style: TextStyle(
                   color: _subColor, fontSize: 11, fontWeight: FontWeight.w600)),
@@ -247,7 +245,7 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                     margin: const EdgeInsets.symmetric(horizontal: 3),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: selected ? couleur.withAlpha(38) : _surfaceColor,
+                      color: selected ? couleur.withValues(alpha: 0.15) : _surfaceColor,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: selected ? couleur : Colors.transparent,
@@ -277,9 +275,8 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
           ),
           const SizedBox(height: 16),
 
-          // Ligne associée (optionnel)
           if (_lignesDuType.isNotEmpty) ...[
-            Text('Ligne associée (optionnel)',
+            Text('Ligne associee (optionnel)',
                 style: TextStyle(
                     color: _subColor,
                     fontSize: 11,
@@ -290,21 +287,21 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
               decoration: BoxDecoration(
                 color: _surfaceColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(color: _dividerColor),
               ),
               child: Material(
                 type: MaterialType.transparency,
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _ligneSelectionnee,
-                    hint: Text('Sélectionner une ligne',
+                    hint: Text('Selectionner une ligne',
                         style: TextStyle(color: _subColor, fontSize: 13)),
                     dropdownColor: _bgColor,
                     isExpanded: true,
                     items: [
                       DropdownMenuItem(
                         value: null,
-                        child: Text('Aucune ligne spécifique',
+                        child: Text('Aucune ligne specifique',
                             style: TextStyle(color: _subColor, fontSize: 13)),
                       ),
                       ..._lignesDuType.map((id) {
@@ -328,13 +325,12 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
             const SizedBox(height: 16),
           ],
 
-          // Note info
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF2196F3).withAlpha(20),
+              color: const Color(0xFF2196F3).withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF2196F3).withAlpha(51)),
+              border: Border.all(color: const Color(0xFF2196F3).withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -344,8 +340,8 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                 Expanded(
                   child: Text(
                     _isProbleme
-                        ? 'Votre signalement sera visible en attente de validation par la communauté.'
-                        : 'Cet arrêt sera visible en attente de validation par la communauté.',
+                        ? 'Votre signalement sera visible en attente de validation par la communaute.'
+                        : 'Cet arret sera visible en attente de validation par la communaute.',
                     style:
                         TextStyle(color: _subColor, fontSize: 11, height: 1.4),
                   ),
@@ -355,7 +351,6 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
           ),
           const SizedBox(height: 20),
 
-          // Bouton soumettre
           GestureDetector(
             onTap: _isLoading ? null : _soumettre,
             child: AnimatedContainer(
@@ -375,7 +370,7 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                 boxShadow: _nomController.text.trim().isNotEmpty
                     ? [
                         BoxShadow(
-                          color: const Color(0xFFFF6B2B).withAlpha(89),
+                          color: const Color(0xFFFF6B2B).withValues(alpha: 0.35),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         ),
@@ -409,7 +404,7 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                         Text(
                           _isProbleme
                               ? 'Envoyer le signalement'
-                              : 'Signaler cet arrêt',
+                              : 'Signaler cet arret',
                           style: TextStyle(
                             color: _nomController.text.trim().isNotEmpty
                                 ? Colors.white

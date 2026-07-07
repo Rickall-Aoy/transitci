@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../services/location_service.dart';
 import '../models/trajet.dart';
 import '../services/settings_service.dart';
+import '../app_theme.dart';
 
 class NavigationScreen extends StatefulWidget {
   final Trajet trajet;
@@ -36,7 +37,6 @@ class _NavigationScreenState extends State<NavigationScreen>
   bool _autoTheme = false;
   bool _panelExpanded = false;
 
-  // Segment actif (navigation étape par étape)
   int _segmentActif = 0;
 
   late AnimationController _panelController;
@@ -44,42 +44,18 @@ class _NavigationScreenState extends State<NavigationScreen>
   late Animation<double> _panelAnimation;
   late Animation<double> _pulseAnimation;
 
-  static const String _mapStyleNight = '''
-  [
-    {"elementType": "geometry", "stylers": [{"color": "#1a1a2e"}]},
-    {"elementType": "labels.text.fill", "stylers": [{"color": "#746855"}]},
-    {"elementType": "labels.text.stroke", "stylers": [{"color": "#242f3e"}]},
-    {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#16213e"}]},
-    {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#0f3460"}]},
-    {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#0f3460"}]},
-    {"featureType": "poi", "elementType": "geometry", "stylers": [{"color": "#16213e"}]}
-  ]
-  ''';
-
-  static const String _mapStyleDay = '''
-  [
-    {"elementType": "geometry", "stylers": [{"color": "#f5f0e8"}]},
-    {"elementType": "labels.text.fill", "stylers": [{"color": "#523735"}]},
-    {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#ffffff"}]},
-    {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#FF6B2B"}]},
-    {"featureType": "water", "elementType": "geometry.fill", "stylers": [{"color": "#aadaff"}]},
-    {"featureType": "poi.park", "elementType": "geometry", "stylers": [{"color": "#c5dea8"}]}
-  ]
-  ''';
-
   bool get _isNight {
     if (!_autoTheme) return false;
     final h = DateTime.now().hour;
     return h >= 19 || h < 6;
   }
 
-  Color get _bgColor => _isNight ? const Color(0xFF0A0A0A) : Colors.white;
-  Color get _textColor => _isNight ? Colors.white : const Color(0xFF0A0A0A);
-  Color get _subTextColor => _isNight ? Colors.white54 : Colors.grey.shade500;
+  Color get _bgColor => _isNight ? AppTheme.darkBg : Colors.white;
+  Color get _textColor => _isNight ? AppTheme.darkTextPrimary : const Color(0xFF0A0A0A);
+  Color get _subTextColor => _isNight ? AppTheme.darkTextSecondary : Colors.grey.shade600;
   Color get _surfaceColor =>
-      _isNight ? const Color(0xFF161616) : const Color(0xFFF5F5F5);
+      _isNight ? AppTheme.darkSurfaceBright : const Color(0xFFF5F5F5);
 
-  // Couleur selon le résumé du trajet
   Color get _couleurPrincipale {
     final resume = widget.trajet.resume;
     if (resume.contains('Woro')) return const Color(0xFFFF6B2B);
@@ -88,12 +64,10 @@ class _NavigationScreenState extends State<NavigationScreen>
     return const Color(0xFFFF6B2B);
   }
 
-  // Segments de transport uniquement
   List<Segment> get _segmentsTransport => widget.trajet.segments
       .where((s) => s.type == TypeSegment.transport)
       .toList();
 
-  // Segment actuel
   Segment get _segmentCourant => widget.trajet.segments[
       _segmentActif.clamp(0, widget.trajet.segments.length - 1)];
 
@@ -149,14 +123,12 @@ class _NavigationScreenState extends State<NavigationScreen>
   Future<void> _tracerTousLesSegments() async {
     final allPoints = <LatLng>[];
     final allPolylines = <Polyline>{};
-
-    // Tracer chaque segment du trajet
     final segments = widget.trajet.segments;
 
     for (int i = 0; i < segments.length; i++) {
       final s = segments[i];
       if (s.type == TypeSegment.piedVersDest && i == segments.length - 1) {
-        continue; // Skip dernier segment pied si trop court
+        continue;
       }
 
       final deLat = i == 0 ? (_userLat ?? s.deLatitude) : s.deLatitude;
@@ -173,8 +145,6 @@ class _NavigationScreenState extends State<NavigationScreen>
 
       if (points.isNotEmpty) {
         allPoints.addAll(points);
-
-        // Couleur selon type de segment
         final color = s.type == TypeSegment.transport
             ? _couleurPrincipale
             : const Color(0xFF00C896);
@@ -192,11 +162,10 @@ class _NavigationScreenState extends State<NavigationScreen>
           jointType: JointType.round,
         ));
 
-        // Contour blanc
         allPolylines.add(Polyline(
           polylineId: PolylineId('border_$i'),
           points: points,
-          color: Colors.white.withOpacity(0.3),
+          color: _isNight ? AppTheme.darkTextTertiary : Colors.white.withOpacity(0.3),
           width: 10,
           startCap: Cap.roundCap,
           endCap: Cap.roundCap,
@@ -245,17 +214,15 @@ class _NavigationScreenState extends State<NavigationScreen>
   void _placerMarqueurs() {
     final markers = <Marker>{};
 
-    // Position utilisateur
     if (_userLat != null && _userLon != null) {
       markers.add(Marker(
         markerId: const MarkerId('user'),
         position: LatLng(_userLat!, _userLon!),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-        infoWindow: const InfoWindow(title: '📍 Ma position'),
+        infoWindow: const InfoWindow(title: 'Ma position'),
       ));
     }
 
-    // Marqueurs de gares (points de correspondance)
     final segmentsTransport = _segmentsTransport;
     for (int i = 0; i < segmentsTransport.length; i++) {
       final s = segmentsTransport[i];
@@ -278,12 +245,11 @@ class _NavigationScreenState extends State<NavigationScreen>
       }
     }
 
-    // Destination finale
     markers.add(Marker(
       markerId: const MarkerId('destination'),
       position: LatLng(widget.destLat, widget.destLon),
       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      infoWindow: const InfoWindow(title: '🎯 Destination'),
+      infoWindow: const InfoWindow(title: 'Destination'),
     ));
 
     if (mounted) setState(() => _markers = markers);
@@ -319,7 +285,6 @@ class _NavigationScreenState extends State<NavigationScreen>
     if (_segmentActif < widget.trajet.segments.length - 1) {
       HapticFeedback.mediumImpact();
       setState(() => _segmentActif++);
-      // Centrer sur le prochain point
       final s = _segmentCourant;
       _mapController?.animateCamera(
         CameraUpdate.newLatLngZoom(
@@ -334,7 +299,6 @@ class _NavigationScreenState extends State<NavigationScreen>
     return Scaffold(
       body: Stack(
         children: [
-          // ── Carte ──
           GoogleMap(
             key: const ValueKey('navigation_google_map'),
             initialCameraPosition: CameraPosition(
@@ -347,7 +311,7 @@ class _NavigationScreenState extends State<NavigationScreen>
             onMapCreated: (controller) {
               _mapController = controller;
               controller.setMapStyle(
-                  _isNight ? _mapStyleNight : _mapStyleDay);
+                  _isNight ? AppTheme.mapStyleNight : AppTheme.mapStyleDay);
               if (_routePoints.isNotEmpty) _ajusterCamera();
             },
             polylines: _polylines,
@@ -357,7 +321,6 @@ class _NavigationScreenState extends State<NavigationScreen>
             zoomControlsEnabled: false,
           ),
 
-          // ── Gradient haut ──
           Positioned(
             top: 0, left: 0, right: 0,
             height: 120,
@@ -368,7 +331,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                   end: Alignment.bottomCenter,
                   colors: [
                     _isNight
-                        ? const Color(0xDD0A0A0A)
+                        ? AppTheme.darkOverlay
                         : const Color(0xCCFFFFFF),
                     Colors.transparent,
                   ],
@@ -377,13 +340,11 @@ class _NavigationScreenState extends State<NavigationScreen>
             ),
           ),
 
-          // ── Barre du haut ──
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
             left: 16, right: 16,
             child: Row(
               children: [
-                // Retour
                 GestureDetector(
                   onTap: () {
                     HapticFeedback.lightImpact();
@@ -392,11 +353,13 @@ class _NavigationScreenState extends State<NavigationScreen>
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: _bgColor.withOpacity(0.9),
+                      color: _bgColor.withValues(alpha: 0.9),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: _isNight
+                              ? AppTheme.darkStroke
+                              : Colors.black.withValues(alpha: 0.2),
                           blurRadius: 8,
                         ),
                       ],
@@ -406,18 +369,18 @@ class _NavigationScreenState extends State<NavigationScreen>
                   ),
                 ),
                 const SizedBox(width: 10),
-
-                // Titre trajet
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: _bgColor.withOpacity(0.9),
+                      color: _bgColor.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
+                          color: _isNight
+                              ? AppTheme.darkStroke
+                              : Colors.black.withValues(alpha: 0.15),
                           blurRadius: 8,
                         ),
                       ],
@@ -434,8 +397,6 @@ class _NavigationScreenState extends State<NavigationScreen>
                   ),
                 ),
                 const SizedBox(width: 10),
-
-                // Recentrer
                 GestureDetector(
                   onTap: () {
                     HapticFeedback.lightImpact();
@@ -444,11 +405,13 @@ class _NavigationScreenState extends State<NavigationScreen>
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: _bgColor.withOpacity(0.9),
+                      color: _bgColor.withValues(alpha: 0.9),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: _isNight
+                              ? AppTheme.darkStroke
+                              : Colors.black.withValues(alpha: 0.2),
                           blurRadius: 8,
                         ),
                       ],
@@ -461,10 +424,9 @@ class _NavigationScreenState extends State<NavigationScreen>
             ),
           ),
 
-          // ── Loader ──
           if (_isLoading)
             Container(
-              color: _bgColor.withOpacity(0.85),
+              color: _bgColor.withValues(alpha: 0.85),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -474,7 +436,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                       child: Container(
                         width: 64, height: 64,
                         decoration: BoxDecoration(
-                          color: _couleurPrincipale.withOpacity(0.15),
+                          color: _couleurPrincipale.withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                           border: Border.all(
                               color: _couleurPrincipale, width: 2),
@@ -497,7 +459,6 @@ class _NavigationScreenState extends State<NavigationScreen>
               ),
             ),
 
-          // ── Erreur ──
           if (_erreur != null && !_isLoading)
             Positioned(
               top: MediaQuery.of(context).padding.top + 80,
@@ -505,7 +466,7 @@ class _NavigationScreenState extends State<NavigationScreen>
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade900.withOpacity(0.9),
+                  color: Colors.red.shade900.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.red.shade700),
                 ),
@@ -524,7 +485,6 @@ class _NavigationScreenState extends State<NavigationScreen>
               ),
             ),
 
-          // ── Panel bas ──
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: SlideTransition(
@@ -555,7 +515,9 @@ class _NavigationScreenState extends State<NavigationScreen>
               const BorderRadius.vertical(top: Radius.circular(28)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.25),
+              color: _isNight
+                  ? AppTheme.darkStroke
+                  : Colors.black.withValues(alpha: 0.25),
               blurRadius: 30,
               offset: const Offset(0, -8),
             ),
@@ -568,24 +530,21 @@ class _NavigationScreenState extends State<NavigationScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle
             Center(
               child: Container(
                 width: 36, height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: _isNight ? Colors.white24 : Colors.black12,
+                  color: _isNight ? AppTheme.darkStroke : Colors.black12,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
 
-            // ── Étape actuelle ──
             _buildEtapeCourante(),
 
             const SizedBox(height: 14),
 
-            // ── Stats globales ──
             Row(
               children: [
                 _buildInfoChip(
@@ -611,7 +570,6 @@ class _NavigationScreenState extends State<NavigationScreen>
               ],
             ),
 
-            // ── Détails expandables ──
             AnimatedCrossFade(
               duration: const Duration(milliseconds: 300),
               crossFadeState: _panelExpanded
@@ -621,7 +579,6 @@ class _NavigationScreenState extends State<NavigationScreen>
               secondChild: Column(
                 children: [
                   const SizedBox(height: 14),
-                  // Tous les segments
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -652,7 +609,6 @@ class _NavigationScreenState extends State<NavigationScreen>
 
                   const SizedBox(height: 14),
 
-                  // Bouton segment suivant
                   if (_segmentActif < widget.trajet.segments.length - 1)
                     GestureDetector(
                       onTap: _segmentSuivant,
@@ -662,13 +618,13 @@ class _NavigationScreenState extends State<NavigationScreen>
                           gradient: LinearGradient(
                             colors: [
                               _couleurPrincipale,
-                              _couleurPrincipale.withOpacity(0.7),
+                              _couleurPrincipale.withValues(alpha: 0.7),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: _couleurPrincipale.withOpacity(0.35),
+                              color: _couleurPrincipale.withValues(alpha: 0.35),
                               blurRadius: 16,
                               offset: const Offset(0, 6),
                             ),
@@ -709,16 +665,16 @@ class _NavigationScreenState extends State<NavigationScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -739,14 +695,18 @@ class _NavigationScreenState extends State<NavigationScreen>
                     fontSize: 13,
                   ),
                 ),
+                if (s.conseil != null && s.conseil!.isNotEmpty)
+                  Text(
+                    s.conseil!,
+                    style: TextStyle(color: _subTextColor, fontSize: 11),
+                  ),
                 Text(
-                  '${s.dureeMinutes} min · ${s.prix > 0 ? "${s.prix} FCFA" : "À pied"}',
+                  '${s.dureeMinutes} min · ${s.prix > 0 ? "${s.prix} FCFA" : "A pied"}',
                   style: TextStyle(color: _subTextColor, fontSize: 11),
                 ),
               ],
             ),
           ),
-          // Indicateur étape
           Text(
             '${_segmentActif + 1}/${widget.trajet.segments.length}',
             style: TextStyle(
@@ -765,8 +725,8 @@ class _NavigationScreenState extends State<NavigationScreen>
     final color = isActive
         ? _couleurPrincipale
         : (isTransport
-            ? _couleurPrincipale.withOpacity(0.5)
-            : const Color(0xFF00C896).withOpacity(0.5));
+            ? _couleurPrincipale.withValues(alpha: 0.5)
+            : const Color(0xFF00C896).withValues(alpha: 0.5));
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -775,7 +735,7 @@ class _NavigationScreenState extends State<NavigationScreen>
           Container(
             width: 28, height: 28,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               shape: BoxShape.circle,
               border: isActive
                   ? Border.all(color: color, width: 1.5)
@@ -788,14 +748,29 @@ class _NavigationScreenState extends State<NavigationScreen>
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              s.description,
-              style: TextStyle(
-                color: isActive ? _textColor : _subTextColor,
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-              ),
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  s.description,
+                  style: TextStyle(
+                    color: isActive ? _textColor : _subTextColor,
+                    fontSize: 11,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (s.conseil != null && s.conseil!.isNotEmpty)
+                  Text(
+                    s.conseil!,
+                    style: TextStyle(
+                      color: isActive ? _subTextColor : _subTextColor.withValues(alpha: 0.7),
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
             ),
           ),
           Text(
@@ -817,9 +792,9 @@ class _NavigationScreenState extends State<NavigationScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Column(
           children: [

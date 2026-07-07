@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../services/places_service.dart';
 import '../data/suggestions_locales.dart';
+import '../app_theme.dart';
 
 class SearchDestinationWidget extends StatefulWidget {
   final Function(String nom, double lat, double lon) onDestinationSelected;
@@ -33,17 +34,16 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
   Timer? _searchDebounce;
   int _searchRequestId = 0;
 
-  // Couleurs selon thème
   Color get _bgColor =>
-      widget.isNight ? const Color(0xFF1E1E1E) : const Color(0xFFF5F5F5);
+      widget.isNight ? AppTheme.darkSurfaceBright : const Color(0xFFF5F5F5);
   Color get _cardColor =>
-      widget.isNight ? const Color(0xFF161616) : Colors.white;
+      widget.isNight ? AppTheme.darkSurface : Colors.white;
   Color get _textColor =>
-      widget.isNight ? Colors.white : const Color(0xFF0A0A0A);
+      widget.isNight ? AppTheme.darkTextPrimary : const Color(0xFF0A0A0A);
   Color get _subColor =>
-      widget.isNight ? Colors.white38 : Colors.black38;
+      widget.isNight ? AppTheme.darkTextTertiary : Colors.grey.shade500;
   Color get _dividerColor =>
-      widget.isNight ? Colors.white10 : Colors.grey.shade200;
+      widget.isNight ? AppTheme.darkStroke : Colors.grey.shade200;
 
   @override
   void initState() {
@@ -58,7 +58,6 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
   }
 
   void _afficherSuggestions(String input) {
-    // Filtrer suggestions locales
     final query = input.toLowerCase();
     setState(() {
       _suggestionsFiltrees = query.isEmpty
@@ -112,7 +111,6 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
       sessionToken: _sessionToken,
     );
 
-    // Renouvelle le session token après sélection
     _sessionToken = _uuid.v4();
 
     setState(() {
@@ -145,15 +143,14 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // ── Barre de recherche ──
         Container(
           decoration: BoxDecoration(
             color: _bgColor,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: _showResults
-                  ? const Color(0xFFFF6B2B).withOpacity(0.5)
-                  : Colors.white12,
+                  ? const Color(0xFFFF6B2B).withValues(alpha: 0.5)
+                  : _dividerColor,
               width: _showResults ? 1.5 : 1,
             ),
           ),
@@ -198,7 +195,6 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
           ),
         ),
 
-        // ── Résultats ──
         if (_showResults)
           Container(
             margin: const EdgeInsets.only(top: 6),
@@ -208,7 +204,7 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
+                  color: widget.isNight ? AppTheme.darkStroke : Colors.black.withValues(alpha: 0.15),
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                 ),
@@ -220,29 +216,26 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
                 shrinkWrap: true,
                 padding: EdgeInsets.zero,
                 children: [
-                  // Suggestions locales
                   if (_suggestionsFiltrees.isNotEmpty) ...[
-                    _buildSectionHeader('📍 Lieux populaires'),
+                    _buildSectionHeader('Lieux populaires'),
                     ..._suggestionsFiltrees.map((s) =>
                         _buildSuggestionLocale(s)),
                   ],
 
-                  // Résultats Google Places
                   if (_predictions.isNotEmpty) ...[
                     if (_suggestionsFiltrees.isNotEmpty)
                       Divider(height: 1, color: _dividerColor),
-                    _buildSectionHeader('🔍 Résultats Google'),
+                    _buildSectionHeader('Resultats Google'),
                     ..._predictions.map((p) => _buildPrediction(p)),
                   ],
 
-                  // Aucun résultat
                   if (_predictions.isEmpty &&
                       _suggestionsFiltrees.isEmpty &&
                       _controller.text.length >= 2)
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Text(
-                        'Aucun lieu trouvé',
+                        'Aucun lieu trouve',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: _subColor, fontSize: 13),
                       ),
@@ -280,7 +273,7 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
             Container(
               width: 36, height: 36,
               decoration: BoxDecoration(
-                color: const Color(0xFFFF6B2B).withOpacity(0.1),
+                color: const Color(0xFFFF6B2B).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Center(
@@ -326,7 +319,7 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
             Container(
               width: 36, height: 36,
               decoration: BoxDecoration(
-                color: const Color(0xFF2196F3).withOpacity(0.1),
+                color: const Color(0xFF2196F3).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.place,

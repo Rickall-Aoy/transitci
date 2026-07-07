@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_theme.dart';
@@ -13,16 +14,16 @@ import 'screens/passager/search_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  debugPrint('🚀 App démarrage...');
+  debugPrint('Supabase URL: ${SupabaseConfig.url}');
+  debugPrint('Supabase key présente: ${SupabaseConfig.anonKey.isNotEmpty}');
+
   await Supabase.initialize(
     url: SupabaseConfig.url,
-    publishableKey: SupabaseConfig.publishableKey,
+    publishableKey: SupabaseConfig.anonKey,
   );
 
-  if (SupabaseConfig.isConfigured) {
-    debugPrint('✅ Supabase connecté');
-  } else {
-    debugPrint('⚠️ Supabase non configuré — mode mock/local');
-  }
+  debugPrint('✅ Supabase OK');
 
   runApp(const TransitCIApp());
 }
@@ -36,6 +37,7 @@ class TransitCIApp extends StatelessWidget {
       title: 'Transit CI',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.buildTheme(),
+      darkTheme: AppTheme.buildDarkTheme(),
       initialRoute: '/',
       routes: {
         '/': (context) => const HomeScreen(),
@@ -49,7 +51,7 @@ class TransitCIApp extends StatelessWidget {
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (_) => const _PlaceholderScreen(
           title: 'Page introuvable',
-          message: 'Cette route n’existe pas encore.',
+          message: 'Cette route n\'existe pas encore.',
         ),
       ),
     );
@@ -67,7 +69,13 @@ class _PlaceholderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isNight = Theme.of(context).brightness == Brightness.dark;
+    final bg = isNight ? AppTheme.darkSurface : Colors.white;
+    final textColor = isNight ? AppTheme.darkTextPrimary : const Color(0xFF0A0A0A);
+    final subText = isNight ? AppTheme.darkTextSecondary : Colors.grey.shade600;
+
     return Scaffold(
+      backgroundColor: bg,
       appBar: AppBar(
         title: Text(title),
       ),
@@ -77,16 +85,17 @@ class _PlaceholderScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.traffic_outlined,
                 size: 56,
-                color: Color(0xFFFF6B00),
+                color: AppTheme.primary,
               ),
               const SizedBox(height: 16),
               Text(
                 title,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: textColor,
                     ),
                 textAlign: TextAlign.center,
               ),
@@ -94,7 +103,7 @@ class _PlaceholderScreen extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: TextStyle(color: subText),
               ),
             ],
           ),

@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../data/lignes_mock.dart';
+import '../../services/gtfs_loader.dart';
 import '../../services/location_service.dart';
 import '../../services/places_service.dart';
 import '../../services/routing_service.dart';
+import '../../services/supabase_service.dart';
 import '../results_screen.dart';
 
 /// Écran de recherche passager avec autocomplétion Places API.
@@ -99,12 +100,18 @@ class _SearchScreenState extends State<SearchScreen> {
       }
 
       final position = await LocationService.getCurrentPosition();
+      await GtfsLoader.instance.initialize();
+      final lignesSupabase = await SupabaseService.getLignes();
+      final toutesLesLignes = [
+        ...GtfsLoader.instance.lignes,
+        ...lignesSupabase,
+      ];
       final trajets = RoutingService.calculerTrajets(
         userLat: position.latitude,
         userLon: position.longitude,
         destLat: detail.latitude,
         destLon: detail.longitude,
-        lignes: lignesMock,
+        lignes: toutesLesLignes,
         heure: DateTime.now().hour,
       );
 

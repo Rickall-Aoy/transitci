@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/trajet.dart';
+import '../services/location_service.dart';
 import '../services/settings_service.dart';
 import '../services/yango_estimate_service.dart';
+import '../app_theme.dart';
 import 'navigation_screen.dart';
 
 enum Priorite { economique, rapide, equilibre }
@@ -88,14 +90,10 @@ class _ResultsScreenState extends State<ResultsScreen>
     return h >= 19 || h < 6;
   }
 
-  Color get _bgColor =>
-      _isNight ? const Color(0xFF0A0A0A) : const Color(0xFFF5F5F5);
-  Color get _cardColor =>
-      _isNight ? const Color(0xFF161616) : Colors.white;
-  Color get _textColor =>
-      _isNight ? Colors.white : const Color(0xFF0A0A0A);
-  Color get _subTextColor =>
-      _isNight ? Colors.white54 : Colors.grey.shade500;
+  Color get _bgColor => _isNight ? AppTheme.darkBg : const Color(0xFFF5F5F5);
+  Color get _cardColor => _isNight ? AppTheme.darkSurfaceBright : Colors.white;
+  Color get _textColor => _isNight ? AppTheme.darkTextPrimary : const Color(0xFF0A0A0A);
+  Color get _subTextColor => _isNight ? AppTheme.darkTextSecondary : Colors.grey.shade600;
 
   void _changerPriorite(Priorite p) {
     HapticFeedback.lightImpact();
@@ -134,51 +132,9 @@ class _ResultsScreenState extends State<ResultsScreen>
       body: Column(
         children: [
           _buildHeader(),
-          _buildPrioriteFilter(),
+          if (_options.isNotEmpty) _buildPrioriteFilter(),
           Expanded(
-            child: _options.isEmpty
-                ? Center(
-                    child: Text(
-                      'Aucun trajet trouvé',
-                      style: TextStyle(color: _subTextColor),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                    itemCount: _options.length + (_yangoEstimate != null ? 1 : 0),
-                    itemBuilder: (_, i) {
-                      if (_yangoEstimate != null && i == 0) {
-                        final estim = _yangoEstimate!;
-                        return AnimatedBuilder(
-                          animation: _cardAnimations.first,
-                          builder: (_, child) => Opacity(
-                            opacity: _cardAnimations.first.value,
-                            child: Transform.translate(
-                              offset: Offset(0, 40 * (1 - _cardAnimations.first.value)),
-                              child: child,
-                            ),
-                          ),
-                          child: _buildYangoCard(estim),
-                        );
-                      }
-
-                      final index = _yangoEstimate != null ? i - 1 : i;
-                      final anim = index < _cardAnimations.length
-                          ? _cardAnimations[index]
-                          : _cardAnimations.last;
-                      return AnimatedBuilder(
-                        animation: anim,
-                        builder: (_, child) => Opacity(
-                          opacity: anim.value,
-                          child: Transform.translate(
-                            offset: Offset(0, 40 * (1 - anim.value)),
-                            child: child,
-                          ),
-                        ),
-                        child: _buildTrajetCard(_options[index], index),
-                      );
-                    },
-                  ),
+            child: _buildContenu(),
           ),
         ],
       ),
@@ -193,7 +149,7 @@ class _ResultsScreenState extends State<ResultsScreen>
         color: _cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(_isNight ? 0.4 : 0.08),
+            color: _isNight ? AppTheme.darkStroke : Colors.black.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -206,7 +162,7 @@ class _ResultsScreenState extends State<ResultsScreen>
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _isNight ? Colors.white10 : Colors.grey.shade100,
+                color: _isNight ? AppTheme.darkStroke : Colors.grey.shade100,
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.arrow_back, color: _textColor, size: 20),
@@ -232,7 +188,7 @@ class _ResultsScreenState extends State<ResultsScreen>
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        '→ ${widget.destination}',
+                        '-> ${widget.destination}',
                         style: const TextStyle(
                           color: Color(0xFFFF6B2B),
                           fontSize: 12,
@@ -249,14 +205,16 @@ class _ResultsScreenState extends State<ResultsScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFFF6B2B).withOpacity(0.15),
+              color: const Color(0xFFFF6B2B).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: const Color(0xFFFF6B2B).withOpacity(0.3),
+                color: const Color(0xFFFF6B2B).withValues(alpha: 0.3),
               ),
             ),
             child: Text(
-              '${_options.length + (_yangoEstimate != null ? 1 : 0)} option${_options.length + (_yangoEstimate != null ? 1 : 0) > 1 ? 's' : ''}',
+              _options.isEmpty
+                  ? 'Aucun trajet'
+                  : '${_options.length + (_yangoEstimate != null ? 1 : 0)} option${_options.length + (_yangoEstimate != null ? 1 : 0) > 1 ? 's' : ''}',
               style: const TextStyle(
                 color: Color(0xFFFF6B2B),
                 fontSize: 12,
@@ -271,9 +229,9 @@ class _ResultsScreenState extends State<ResultsScreen>
 
   Widget _buildPrioriteFilter() {
     final filters = [
-      {'label': '💰 Économique', 'value': Priorite.economique},
-      {'label': '⚡ Rapide', 'value': Priorite.rapide},
-      {'label': '⚖️ Équilibré', 'value': Priorite.equilibre},
+      {'label': 'Economique', 'value': Priorite.economique},
+      {'label': 'Rapide', 'value': Priorite.rapide},
+      {'label': 'Equilibre', 'value': Priorite.equilibre},
     ];
 
     return Container(
@@ -284,7 +242,7 @@ class _ResultsScreenState extends State<ResultsScreen>
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(_isNight ? 0.3 : 0.06),
+            color: _isNight ? AppTheme.darkStroke : Colors.black.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -326,6 +284,132 @@ class _ResultsScreenState extends State<ResultsScreen>
     );
   }
 
+  Widget _buildContenu() {
+    if (_options.isEmpty) {
+      return _buildFallbackMarche();
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      itemCount: _options.length + (_yangoEstimate != null ? 1 : 0),
+      itemBuilder: (_, i) {
+        if (_yangoEstimate != null && i == 0) {
+          final estim = _yangoEstimate!;
+          return AnimatedBuilder(
+            animation: _cardAnimations.first,
+            builder: (_, child) => Opacity(
+              opacity: _cardAnimations.first.value,
+              child: Transform.translate(
+                offset: Offset(0, 40 * (1 - _cardAnimations.first.value)),
+                child: child,
+              ),
+            ),
+            child: _buildYangoCard(estim),
+          );
+        }
+
+        final index = _yangoEstimate != null ? i - 1 : i;
+        final anim = index < _cardAnimations.length
+            ? _cardAnimations[index]
+            : _cardAnimations.last;
+        return AnimatedBuilder(
+          animation: anim,
+          builder: (_, child) => Opacity(
+            opacity: anim.value,
+            child: Transform.translate(
+              offset: Offset(0, 40 * (1 - anim.value)),
+              child: child,
+            ),
+          ),
+          child: _buildTrajetCard(_options[index], index),
+        );
+      },
+    );
+  }
+
+  Widget _buildFallbackMarche() {
+    final dist = LocationService.distanceEnMetres(
+      lat1: widget.userLat ?? 0,
+      lon1: widget.userLon ?? 0,
+      lat2: widget.destLat ?? 0,
+      lon2: widget.destLon ?? 0,
+    );
+    final tempsMarche = (dist / 4000 * 60).round();
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2196F3).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: const Color(0xFF2196F3).withOpacity(0.3)),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.directions_walk,
+                    color: Color(0xFF2196F3), size: 40),
+                const SizedBox(height: 12),
+                Text(
+                  'Aucune ligne directe disponible',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _textColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Aucune ligne de transport ne dessert '
+                  'directement cette zone pour le moment.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _subTextColor, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2196F3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.directions_walk,
+                          color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Trajet à pied : ~$tempsMarche min',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '💡 Tu peux signaler un arrêt manquant\n'
+            'pour améliorer TransitCI !',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _subTextColor, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildYangoCard(YangoEstimate estimate) {
     const couleur = Color(0xFFFFCC00);
 
@@ -334,10 +418,10 @@ class _ResultsScreenState extends State<ResultsScreen>
       decoration: BoxDecoration(
         color: _cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: couleur.withOpacity(0.6), width: 1.5),
+        border: Border.all(color: couleur.withValues(alpha: 0.6), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: couleur.withOpacity(0.15),
+            color: couleur.withValues(alpha: 0.15),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -348,9 +432,8 @@ class _ResultsScreenState extends State<ResultsScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: couleur.withOpacity(0.1),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
+              color: couleur.withValues(alpha: 0.1),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Row(
               children: [
@@ -381,9 +464,9 @@ class _ResultsScreenState extends State<ResultsScreen>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                _buildStat('💰', '${estimate.prixMin}', 'FCFA', couleur),
+                _buildStat('FCFA', '${estimate.prixMin}', 'prix min', couleur),
                 _buildDivider(),
-                _buildStat('⏱️', '${estimate.dureeMinutes}', 'min', couleur),
+                _buildStat('min', '${estimate.dureeMinutes}', 'duree', couleur),
                 _buildDivider(),
                 const Expanded(
                   child: Column(
@@ -420,14 +503,16 @@ class _ResultsScreenState extends State<ResultsScreen>
               destLat: widget.destLat ?? 0,
               destLon: widget.destLon ?? 0,
             ),
-            transitionsBuilder: (_, animation, __, child) => SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1, 0),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                  parent: animation, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
+            transitionsBuilder: (_, animation, __, child) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(1, 0),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                    parent: animation, curve: Curves.easeOutCubic)),
+                child: child,
+              );
+            },
           ),
         );
       },
@@ -440,13 +525,15 @@ class _ResultsScreenState extends State<ResultsScreen>
               ? Border.all(color: couleur, width: 1.5)
               : Border.all(
                   color: _isNight
-                      ? Colors.white10
+                      ? AppTheme.darkStroke
                       : Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
               color: isMeilleur
-                  ? couleur.withOpacity(0.15)
-                  : Colors.black.withOpacity(_isNight ? 0.3 : 0.06),
+                  ? couleur.withValues(alpha: 0.15)
+                  : _isNight
+                      ? AppTheme.darkStroke
+                      : Colors.black.withValues(alpha: 0.06),
               blurRadius: isMeilleur ? 20 : 10,
               offset: const Offset(0, 4),
             ),
@@ -454,13 +541,11 @@ class _ResultsScreenState extends State<ResultsScreen>
         ),
         child: Column(
           children: [
-            // ── Header ──
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: couleur.withOpacity(0.1),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
+                color: couleur.withValues(alpha: 0.1),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Row(
                 children: [
@@ -491,7 +576,7 @@ class _ResultsScreenState extends State<ResultsScreen>
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: const Text(
-                                  '⭐ Meilleur',
+                                  'Meilleur',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 10,
@@ -516,23 +601,21 @@ class _ResultsScreenState extends State<ResultsScreen>
               ),
             ),
 
-            // ── Stats ──
             Padding(
               padding: const EdgeInsets.symmetric(
                   horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  _buildStat('💰', '${trajet.prixTotal}', 'FCFA', couleur),
+                  _buildStat('', '${trajet.prixTotal}', 'FCFA', couleur),
                   _buildDivider(),
-                  _buildStat('⏱️', '${trajet.dureeTotal}', 'min', couleur),
+                  _buildStat('', '${trajet.dureeTotal}', 'min', couleur),
                   _buildDivider(),
                   _buildStat(
-                      '🔄', '${trajet.correspondances}', 'corresp.', couleur),
+                      '', '${trajet.correspondances}', 'corresp.', couleur),
                 ],
               ),
             ),
 
-            // ── Segments ──
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
@@ -611,7 +694,7 @@ class _ResultsScreenState extends State<ResultsScreen>
     return Container(
       height: 40,
       width: 1,
-      color: _isNight ? Colors.white10 : Colors.grey.shade200,
+      color: _isNight ? AppTheme.darkStroke : Colors.grey.shade200,
     );
   }
 

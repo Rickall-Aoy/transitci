@@ -12,14 +12,15 @@ import 'home/home_overlays.dart';
 import '../services/cluster_service.dart';
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
+import '../services/gtfs_loader.dart';
 import '../widgets/signaler_arret_widget.dart';
 import '../services/routing_service.dart';
 import '../services/settings_service.dart';
 import '../services/crowdsourcing_service.dart';
-import '../services/gtfs_loader.dart';
 import '../data/lignes_mock.dart';
 import '../models/gare.dart';
 import '../models/ligne.dart';
+import '../app_theme.dart';
 import 'results_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -64,30 +65,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     zoom: 13,
   );
 
-  static const String _mapStyleNight = '''
-[
-  {"elementType": "geometry", "stylers": [{"color": "#1a1a2e"}]},
-  {"elementType": "labels.text.fill", "stylers": [{"color": "#746855"}]},
-  {"elementType": "labels.text.stroke", "stylers": [{"color": "#242f3e"}]},
-  {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#16213e"}]},
-  {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#0f3460"}]},
-  {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#0f3460"}]},
-  {"featureType": "poi", "elementType": "geometry", "stylers": [{"color": "#16213e"}]}
-]
-''';
-
-  static const String _mapStyleDay = '''
-[
-  {"elementType": "geometry", "stylers": [{"color": "#f5f0e8"}]},
-  {"elementType": "labels.text.fill", "stylers": [{"color": "#523735"}]},
-  {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#ffffff"}]},
-  {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#FF6B2B"}]},
-  {"featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{"color": "#e9bc62"}]},
-  {"featureType": "water", "elementType": "geometry.fill", "stylers": [{"color": "#aadaff"}]},
-  {"featureType": "poi.park", "elementType": "geometry", "stylers": [{"color": "#c5dea8"}]},
-  {"featureType": "poi", "elementType": "geometry", "stylers": [{"color": "#ede7d8"}]}
-]
-''';
+  final String _mapStyleDay = AppTheme.mapStyleDay;
 
   bool get _isNight {
     if (!_autoTheme) return false; // mode jour par défaut
@@ -95,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return h >= 19 || h < 6;
   }
 
-  String get _mapStyle => _isNight ? _mapStyleNight : _mapStyleDay;
+  String get _mapStyle => _isNight ? AppTheme.mapStyleNight : _mapStyleDay;
 
   bool get _canSearch =>
       _currentPosition != null &&
@@ -115,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _loadSettings();
+    _chargerGtfsEnArrierePlan();
 
     _panelController = AnimationController(
       vsync: this,
@@ -223,9 +202,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _loadPosition() async {
     try {
-      final positionFuture = LocationService.getCurrentPosition();
-      await GtfsLoader.instance.initialize();
+      // Lance GPS et Supabase en parallèle
+      final positionFuture = LocationService.getCurrentPosition()
+          .timeout(const Duration(seconds: 8));
+      final lignesSotraFuture = SupabaseService.getLignesSotra();
+      final supabaseTask = _chargerLignesSupabase();
+
       final position = await positionFuture;
+
       setState(() {
         _currentPosition = position;
         _isLoading = false;
@@ -238,10 +222,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       );
 
-      // Ajouter immédiatement le marqueur utilisateur
       _updateUserMarker();
 
-      final lignesSotra = await SupabaseService.getLignesSotra();
+      final lignesSotra = await lignesSotraFuture;
+
+      // S'assure que les lignes Supabase sont chargées avant ClusterService
+      await supabaseTask;
+
       final arretsSupabase = lignesSotra
           .map((l) => <String, dynamic>{
                 'latitude': l['lat_depart'] ?? l['latitude'],
@@ -251,8 +238,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 'prix': l['prix'] ?? 200,
               })
           .toList();
-
-      await _chargerLignesSupabase();
 
       ClusterService.initialiser(
         onMarkersUpdated: _onClusterMarkersUpdated,
@@ -399,45 +384,79 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _ouvrirSignalerArret(mode: SignalerArretMode.ajout);
   }
 
+  Future<void> _chargerGtfsEnArrierePlan() async {
+    try {
+      await GtfsLoader.instance.initialize();
+      debugPrint('✅ GTFS chargé : ${GtfsLoader.instance.lignes.length} lignes');
+    } catch (e) {
+      debugPrint('⚠️ GTFS erreur : $e');
+    }
+  }
+
   Future<void> _onDestinationSubmitted(
       String nom, double destLat, double destLon) async {
     if (_currentPosition == null) return;
 
     setState(() => _isSearching = true);
-    await Future.delayed(const Duration(milliseconds: 600));
+
+    final lignes = _lignesActives;
 
     final trajets = RoutingService.calculerTrajets(
       userLat: _currentPosition!.latitude,
       userLon: _currentPosition!.longitude,
       destLat: destLat,
       destLon: destLon,
-      lignes: _lignesActives,
+      lignes: lignes,
       heure: DateTime.now().hour,
     );
 
     setState(() => _isSearching = false);
-    if (!mounted) return;
 
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, animation, __) => ResultsScreen(
-          trajets: trajets,
-          destination: nom,
-          destLat: destLat,
-          destLon: destLon,
-          userLat: _currentPosition?.latitude,
-          userLon: _currentPosition?.longitude,
-        ),
-        transitionsBuilder: (_, animation, __, child) => SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-          child: child,
-        ),
-        transitionDuration: const Duration(milliseconds: 500),
+    if (trajets.isNotEmpty && _mapController != null) {
+      final bounds = _calculerBounds(
+        userLat: _currentPosition!.latitude,
+        userLon: _currentPosition!.longitude,
+        destLat: destLat,
+        destLon: destLon,
+      );
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngBounds(bounds, 80),
+      );
+    }
+
+    if (!mounted) return;
+    Navigator.push(context, PageRouteBuilder(
+      pageBuilder: (_, animation, __) => ResultsScreen(
+        trajets: trajets,
+        destination: nom,
+        destLat: destLat,
+        destLon: destLon,
+        userLat: _currentPosition?.latitude,
+        userLon: _currentPosition?.longitude,
+      ),
+      transitionsBuilder: (_, animation, __, child) => SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 1), end: Offset.zero,
+        ).animate(CurvedAnimation(
+            parent: animation, curve: Curves.easeOutCubic)),
+        child: child,
+      ),
+      transitionDuration: const Duration(milliseconds: 500),
+    ));
+  }
+
+  LatLngBounds _calculerBounds({
+    required double userLat, required double userLon,
+    required double destLat, required double destLon,
+  }) {
+    return LatLngBounds(
+      southwest: LatLng(
+        userLat < destLat ? userLat - 0.005 : destLat - 0.005,
+        userLon < destLon ? userLon - 0.005 : destLon - 0.005,
+      ),
+      northeast: LatLng(
+        userLat > destLat ? userLat + 0.005 : destLat + 0.005,
+        userLon > destLon ? userLon + 0.005 : destLon + 0.005,
       ),
     );
   }
@@ -498,7 +517,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   end: Alignment.bottomCenter,
                   colors: [
                     _isNight
-                        ? const Color(0xDD0A0A0A)
+                        ? AppTheme.darkOverlay
                         : const Color(0xCCFFFFFF),
                     Colors.transparent,
                   ],

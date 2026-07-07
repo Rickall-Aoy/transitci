@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/search_destination_widget.dart';
+import '../../app_theme.dart';
 
 class HomeBottomPanel extends StatelessWidget {
   const HomeBottomPanel({
@@ -22,188 +23,29 @@ class HomeBottomPanel extends StatelessWidget {
   final void Function(String nom, double lat, double lon) onDestinationSelected;
   final VoidCallback? onGo;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isNight ? const Color(0xFF111111) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black54,
-            blurRadius: 30,
-            offset: Offset(0, -8),
-          ),
-        ],
-      ),
-      padding: EdgeInsets.fromLTRB(
-        20,
-        16,
-        20,
-        MediaQuery.of(context).padding.bottom + 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: isNight ? Colors.white24 : Colors.black12,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const _TransportLegend(),
-          const SizedBox(height: 16),
-          _ActionButtons(
-            onReportProblem: onReportProblem,
-            onAddStop: onAddStop,
-          ),
-          const SizedBox(height: 16),
-          SearchDestinationWidget(
-            isNight: isNight,
-            onDestinationSelected: onDestinationSelected,
-          ),
-          const SizedBox(height: 12),
-          _GoButton(
-            canSearch: canSearch,
-            hasCurrentPosition: hasCurrentPosition,
-            onGo: onGo,
-          ),
-        ],
+  Color get _textColor => isNight ? Colors.white : const Color(0xFF0A0A0A);
+
+  Widget _buildMessageAccueil() {
+    final h = DateTime.now().hour;
+    final salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bonsoir' : 'Bonne nuit';
+    return Text(
+      '$salut 👋  Où veux-tu aller ?',
+      style: TextStyle(
+        color: _textColor,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
       ),
     );
   }
-}
 
-class _TransportLegend extends StatelessWidget {
-  const _TransportLegend();
-
-  @override
-  Widget build(BuildContext context) {
-    final types = [
-      {'emoji': 'Taxi', 'label': 'Woro-Woro', 'color': const Color(0xFFFF6B2B)},
-      {'emoji': 'Bus', 'label': 'Gbaka', 'color': const Color(0xFF00C896)},
-      {'emoji': 'SOTRA', 'label': 'SOTRA', 'color': const Color(0xFF2196F3)},
-    ];
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: types.map((t) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              t['emoji'] as String,
-              style: TextStyle(
-                color: t['color'] as Color,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              t['label'] as String,
-              style: TextStyle(
-                color: t['color'] as Color,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        );
-      }).toList(),
+  Widget _buildSearchBar() {
+    return SearchDestinationWidget(
+      isNight: isNight,
+      onDestinationSelected: onDestinationSelected,
     );
   }
-}
 
-class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({
-    required this.onReportProblem,
-    required this.onAddStop,
-  });
-
-  final VoidCallback onReportProblem;
-  final VoidCallback onAddStop;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: onReportProblem,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF161616),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.report_problem, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Signaler un probleme',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: GestureDetector(
-            onTap: onAddStop,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6B2B),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_location_alt, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Ajouter un arret',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _GoButton extends StatelessWidget {
-  const _GoButton({
-    required this.canSearch,
-    required this.hasCurrentPosition,
-    required this.onGo,
-  });
-
-  final bool canSearch;
-  final bool hasCurrentPosition;
-  final VoidCallback? onGo;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildGoButton() {
     return GestureDetector(
       onTap: canSearch ? onGo : null,
       child: AnimatedContainer(
@@ -211,10 +53,8 @@ class _GoButton extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: canSearch
-                ? [const Color(0xFFFF6B2B), const Color(0xFFFF8C55)]
-                : [Colors.grey.shade800, Colors.grey.shade700],
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF6B2B), Color(0xFFFF8C55)],
           ),
           borderRadius: BorderRadius.circular(14),
           boxShadow: canSearch
@@ -244,6 +84,145 @@ class _GoButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildLegendeDiscrete() {
+    final types = [
+      {'emoji': '🚕', 'label': 'Woro-Woro', 'color': const Color(0xFFFF6B2B)},
+      {'emoji': '🚐', 'label': 'Gbaka', 'color': const Color(0xFF00C896)},
+      {'emoji': '🚌', 'label': 'SOTRA', 'color': const Color(0xFF2196F3)},
+    ];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: types.map((t) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(t['emoji'] as String, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 3),
+              Text(
+                t['label'] as String,
+                style: TextStyle(
+                  color: (t['color'] as Color).withOpacity(0.7),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildMenuSecondaire() {
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: onReportProblem,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: isNight ? Colors.white10 : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.report_outlined,
+                      size: 14,
+                      color: isNight ? Colors.white54 : Colors.grey.shade600),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Signaler',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isNight ? Colors.white54 : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: GestureDetector(
+            onTap: onAddStop,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: isNight ? Colors.white10 : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_location_outlined,
+                      size: 14,
+                      color: isNight ? Colors.white54 : Colors.grey.shade600),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Ajouter arrêt',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isNight ? Colors.white54 : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isNight ? const Color(0xFF111111) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 30, offset: Offset(0, -8)),
+        ],
+      ),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        16,
+        20,
+        MediaQuery.of(context).padding.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: isNight ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          _buildMessageAccueil(),
+          const SizedBox(height: 12),
+          _buildSearchBar(),
+          const SizedBox(height: 10),
+          _buildGoButton(),
+          const SizedBox(height: 14),
+          _buildLegendeDiscrete(),
+          const SizedBox(height: 10),
+          _buildMenuSecondaire(),
+        ],
       ),
     );
   }
