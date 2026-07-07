@@ -1,74 +1,77 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'maps_service.dart';
 
 class PlacesService {
-  static const String _baseUrl =
-      'https://maps.googleapis.com/maps/api';
+  static const String _baseUrl = 'https://nominatim.openstreetmap.org';
 
-  // ── Autocomplete Google Places ──
+  // Biais géographique sur Abidjan (viewbox), sans forcer une restriction stricte
+  static const String _viewbox = '-4.35,5.55,-3.65,5.05'; // gauche,haut,droite,bas
+  static const String _userAgent = 'TransitCI/1.0 (contact: nzuemichel01@gmail.com)';
+
   static Future<List<PlacePrediction>> autocomplete({
     required String input,
-    required String sessionToken,
+    required String sessionToken, // conservé pour compatibilité d'appel, inutilisé ici
   }) async {
     if (input.trim().isEmpty) return [];
 
     final url = Uri.parse(
-      '$_baseUrl/place/autocomplete/json'
-      '?input=${Uri.encodeComponent(input)}'
-      '&key=${MapsService.apiKey}'
-      '&sessiontoken=$sessionToken'
-      '&language=fr'
-      '&components=country:ci'
-      // Biais géographique sur Abidjan
-      '&location=5.3600,-4.0083'
-      '&radius=30000',
+      '$_baseUrl/search'
+      '?q=${Uri.encodeComponent(input)}'
+      '&format=jsonv2'
+      '&addressdetails=1'
+      '&limit=6'
+      '&countrycodes=ci'
+      '&viewbox=$_viewbox'
+      '&bounded=1',
     );
 
     try {
-      final response = await http.get(url);
-      if (response.statusCode != 200) return [];
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': _userAgent}, // requis par la politique Nominatim
+      );
 
-      final data = jsonDecode(response.body);
-      if (data['status'] != 'OK') return [];
+      if (response.statusCode != 200) {
+        debugPrint('❌ Nominatim search HTTP ${response.statusCode}');
+        return [];
+      }
 
-      return (data['predictions'] as List)
-          .map((p) => PlacePrediction.fromJson(p))
-          .toList();
+      final data = jsonDecode(response.body) as List;
+      if (data.isEmpty) return [];
+
+      return data.map((p) => PlacePrediction.fromNominatim(p)).toList();
     } catch (e) {
+      debugPrint('❌ Nominatim search exception: $e');
       return [];
     }
   }
 
-  // ── Détails d'un lieu (coordonnées GPS) ──
+  // Nominatim renvoie déjà les coordonnées dans le résultat de recherche,
+  // donc pas besoin d'un second appel "détails" comme avec Google Places —
+  // on garde la signature pour éviter de toucher au widget appelant.
   static Future<PlaceDetail?> getPlaceDetail({
     required String placeId,
     required String sessionToken,
   }) async {
-    final url = Uri.parse(
-      '$_baseUrl/place/details/json'
-      '?place_id=$placeId'
-      '&key=${MapsService.apiKey}'
-      '&sessiontoken=$sessionToken'
-      '&language=fr'
-      '&fields=geometry,name,formatted_address',
+    // placeId encode ici directement lat/lon (voir PlacePrediction.fromNominatim)
+    final parts = placeId.split(',');
+    if (parts.length != 3) return null;
+
+    final lat = double.tryParse(parts[0]);
+    final lon = double.tryParse(parts[1]);
+    if (lat == null || lon == null) return null;
+
+    return PlaceDetail(
+      name: parts[2],
+      address: parts[2],
+      latitude: lat,
+      longitude: lon,
     );
-
-    try {
-      final response = await http.get(url);
-      if (response.statusCode != 200) return null;
-
-      final data = jsonDecode(response.body);
-      if (data['status'] != 'OK') return null;
-
-      return PlaceDetail.fromJson(data['result']);
-    } catch (e) {
-      return null;
-    }
   }
 }
 
-// ── Modèles ──
+// ── Modèles (signature identique à l'ancien PlacesService) ──
 
 class PlacePrediction {
   final String placeId;
@@ -83,13 +86,25 @@ class PlacePrediction {
     required this.secondaryText,
   });
 
-  factory PlacePrediction.fromJson(Map<String, dynamic> json) {
-    final structured = json['structured_formatting'] ?? {};
+  factory PlacePrediction.fromNominatim(Map<String, dynamic> json) {
+    final displayName = json['display_name']?.toString() ?? '';
+    final lat = json['lat']?.toString() ?? '0';
+    final lon = json['lon']?.toString() ?? '0';
+
+    // Sépare le premier segment (nom du lieu) du reste (adresse complète)
+    final parts = displayName.split(',');
+    final mainText = parts.isNotEmpty ? parts.first.trim() : displayName;
+    final secondaryText =
+        parts.length > 1 ? parts.sublist(1).join(',').trim() : '';
+
+    // On encode lat/lon/nom directement dans le "placeId" pour éviter
+    // un second appel réseau lors de la sélection (Nominatim search
+    // fournit déjà les coordonnées, contrairement à Google Places).
     return PlacePrediction(
-      placeId: json['place_id'] ?? '',
-      description: json['description'] ?? '',
-      mainText: structured['main_text'] ?? json['description'] ?? '',
-      secondaryText: structured['secondary_text'] ?? '',
+      placeId: '$lat,$lon,$mainText',
+      description: displayName,
+      mainText: mainText,
+      secondaryText: secondaryText,
     );
   }
 }
@@ -106,14 +121,4 @@ class PlaceDetail {
     required this.latitude,
     required this.longitude,
   });
-
-  factory PlaceDetail.fromJson(Map<String, dynamic> json) {
-    final loc = json['geometry']['location'];
-    return PlaceDetail(
-      name: json['name'] ?? '',
-      address: json['formatted_address'] ?? '',
-      latitude: loc['lat'].toDouble(),
-      longitude: loc['lng'].toDouble(),
-    );
-  }
 }

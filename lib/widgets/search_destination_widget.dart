@@ -225,7 +225,7 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
                   if (_predictions.isNotEmpty) ...[
                     if (_suggestionsFiltrees.isNotEmpty)
                       Divider(height: 1, color: _dividerColor),
-                    _buildSectionHeader('Resultats Google'),
+                    _buildSectionHeader('Résultats'),
                     ..._predictions.map((p) => _buildPrediction(p)),
                   ],
 
