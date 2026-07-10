@@ -19,7 +19,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Signaler un problème'), findsOneWidget);
+    expect(find.text('Signaler un probleme'), findsOneWidget);
     expect(find.text('Envoyer le signalement'), findsOneWidget);
   });
 }

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_theme.dart';
 import 'config/supabase_config.dart';
 import 'screens/chauffeur/chauffeur_navigation.dart';
+import 'screens/assistant/assistant_screen.dart';
 import 'screens/chauffeur/login_screen.dart';
 import 'screens/chauffeur/register_screen.dart';
 import 'screens/home_screen.dart';
@@ -47,6 +48,7 @@ class TransitCIApp extends StatelessWidget {
         '/chauffeur/register': (context) => const RegisterScreen(),
         '/chauffeur/home': (context) => const ChauffeurNavigation(),
         '/chauffeur': (context) => const ChauffeurNavigation(),
+        '/assistant': (context) => const AssistantScreen(),
       },
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (_) => const _PlaceholderScreen(

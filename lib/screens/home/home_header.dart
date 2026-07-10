@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/settings_service.dart';
+import '../../config/gemini_config.dart';
 import '../settings_screen.dart';
 
 class HomeHeader extends StatelessWidget {
@@ -81,6 +82,14 @@ class HomeHeader extends StatelessWidget {
                       Navigator.pushNamed(context, '/passager/search');
                     },
                   ),
+                  if (GeminiConfig.transitBotEnabled)
+                    _HeaderIconButton(
+                      icon: Icons.smart_toy_outlined,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pushNamed(context, '/assistant');
+                      },
+                    ),
                   _HeaderIconButton(
                     icon: Icons.settings,
                     onTap: () {

@@ -149,9 +149,11 @@ class HomeErrorBanner extends StatelessWidget {
   const HomeErrorBanner({
     super.key,
     required this.message,
+    this.onSettings,
   });
 
   final String message;
+  final VoidCallback? onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +174,17 @@ class HomeErrorBanner extends StatelessWidget {
               style: const TextStyle(color: Colors.white, fontSize: 12),
             ),
           ),
+          if (onSettings != null) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: onSettings,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text('Paramètres'),
+            ),
+          ],
         ],
       ),
     );

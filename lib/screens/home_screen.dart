@@ -30,7 +30,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   GoogleMapController? _mapController;
   Position? _currentPosition;
   double? _destLat;
@@ -46,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final Set<Polyline> _polylines = {};
   Timer? _vehiculeTimer;
   StreamSubscription<Position>? _positionStreamSub;
+  bool _positionStreamStarted = false;
   bool _followUser = false;
   bool _isLoadingVehicles = false;
   List<ArretSignale> _arretsSignales = [];
@@ -92,6 +94,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSettings();
     _chargerGtfsEnArrierePlan();
 
@@ -201,93 +204,127 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadPosition() async {
+    // Supabase en parallèle (non bloquant)
+    final lignesSotraFuture = SupabaseService.getLignesSotra().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => <Map<String, dynamic>>[],
+    );
+    final supabaseTask = _chargerLignesSupabase().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {},
+    );
+
+    // Position OPTIONNELLE : récupérée dans une méthode dédiée (ré-appelable
+    // au retour au premier plan). Si elle échoue, on continue sans centrer.
+    await _fetchPosition();
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    // Centre de la carte : position si dispo, sinon position par défaut
+    final center = _currentPosition != null
+        ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+        : _defaultPosition.target;
+
+    final lignesSotra = await lignesSotraFuture;
+
+    // S'assure que les lignes Supabase sont chargées avant ClusterService
+    await supabaseTask;
+
+    final arretsSupabase = lignesSotra
+        .map((l) => <String, dynamic>{
+              'latitude': l['lat_depart'] ?? l['latitude'],
+              'longitude': l['lon_depart'] ?? l['longitude'],
+              'nom': '${l['nom']} — ${l['terminus_depart']}',
+              'ligne': l['nom'],
+              'prix': l['prix'] ?? 200,
+            })
+        .toList();
+
+    ClusterService.initialiser(
+      onMarkersUpdated: _onClusterMarkersUpdated,
+      lignes: _lignesActives,
+      arretsSupabase: arretsSupabase,
+    );
+    ClusterService.mettreAJourCamera(
+      CameraPosition(target: center, zoom: 14),
+    );
+    ClusterService.onCameraIdle();
+
+    await _chargerArretsSignales();
+
+    // Charger les positions des véhicules (chauffeurs) et démarrer un timer
+    _chargerVehiculesLive();
+    _vehiculeTimer = Timer.periodic(
+        const Duration(seconds: 30), (_) => _chargerVehiculesLive());
+
+    // Slide up du panel après chargement
+    await Future.delayed(const Duration(milliseconds: 400));
+    _panelController.forward();
+
+    // Le flux de position temps réel est démarré dans _fetchPosition()
+    // (une seule fois, guardé par _positionStreamStarted).
+  }
+
+  /// Récupère la position de manière isolée et ré-appelable (1er lancement et
+  /// retour au premier plan). En cas d'échec, affiche un message d'erreur avec
+  /// un accès direct aux paramètres, sans bloquer le reste de l'app.
+  Future<void> _fetchPosition() async {
     try {
-      // Lance GPS et Supabase en parallèle
-      final positionFuture = LocationService.getCurrentPosition()
-          .timeout(const Duration(seconds: 8));
-      final lignesSotraFuture = SupabaseService.getLignesSotra();
-      final supabaseTask = _chargerLignesSupabase();
-
-      final position = await positionFuture;
-
+      final position = await LocationService.getCurrentPosition();
+      if (!mounted) return;
+      final etaitNull = _currentPosition == null;
       setState(() {
         _currentPosition = position;
-        _isLoading = false;
+        _errorMessage = null;
       });
-
       _mapController?.animateCamera(
         CameraUpdate.newLatLngZoom(
           LatLng(position.latitude, position.longitude),
           14,
         ),
       );
-
       _updateUserMarker();
-
-      final lignesSotra = await lignesSotraFuture;
-
-      // S'assure que les lignes Supabase sont chargées avant ClusterService
-      await supabaseTask;
-
-      final arretsSupabase = lignesSotra
-          .map((l) => <String, dynamic>{
-                'latitude': l['lat_depart'] ?? l['latitude'],
-                'longitude': l['lon_depart'] ?? l['longitude'],
-                'nom': '${l['nom']} — ${l['terminus_depart']}',
-                'ligne': l['nom'],
-                'prix': l['prix'] ?? 200,
-              })
-          .toList();
-
-      ClusterService.initialiser(
-        onMarkersUpdated: _onClusterMarkersUpdated,
-        lignes: _lignesActives,
-        arretsSupabase: arretsSupabase,
-      );
-      ClusterService.mettreAJourCamera(
-        CameraPosition(
-          target: LatLng(position.latitude, position.longitude),
-          zoom: 14,
-        ),
-      );
-      ClusterService.onCameraIdle();
-
-      await _chargerArretsSignales();
-
-      // Charger les positions des véhicules (chauffeurs) et démarrer un timer
-      _chargerVehiculesLive();
-      _vehiculeTimer = Timer.periodic(
-          const Duration(seconds: 30), (_) => _chargerVehiculesLive());
-
-      // Slide up du panel après chargement
-      await Future.delayed(const Duration(milliseconds: 400));
-      _panelController.forward();
-
-      // Démarrer l'écoute de la position en temps réel et mettre à jour le marqueur utilisateur
-      _positionStreamSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 25,
-        ),
-      ).listen((pos) {
-        if (!mounted) return;
-        setState(() => _currentPosition = pos);
-        _updateUserMarker();
-        if (_followUser && _mapController != null) {
-          _mapController!.animateCamera(
-            CameraUpdate.newLatLngZoom(
-              LatLng(pos.latitude, pos.longitude),
-              16,
-            ),
-          );
-        }
-      });
+      _startPositionStream();
+      if (etaitNull && _clusterMarkers.isNotEmpty) {
+        ClusterService.mettreAJourCamera(
+          CameraPosition(
+            target: LatLng(position.latitude, position.longitude),
+            zoom: 14,
+          ),
+        );
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-        _isLoading = false;
-      });
+      debugPrint('⚠️ Position indisponible: $e');
+      if (mounted) {
+        setState(() => _errorMessage =
+            'Position GPS indisponible (permission/GPS). Ouvre les paramètres '
+            "pour autoriser la localisation, puis reviens dans l'app.");
+      }
     }
+  }
+
+  void _startPositionStream() {
+    if (_positionStreamStarted || _currentPosition == null) return;
+    _positionStreamStarted = true;
+    _positionStreamSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 25,
+      ),
+    ).listen((pos) {
+      if (!mounted) return;
+      setState(() => _currentPosition = pos);
+      _updateUserMarker();
+      if (_followUser && _mapController != null) {
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(
+            LatLng(pos.latitude, pos.longitude),
+            16,
+          ),
+        );
+      }
+    });
   }
 
   void _refreshMarkers() {
@@ -593,7 +630,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               bottom: 220,
               left: 20,
               right: 20,
-              child: HomeErrorBanner(message: _errorMessage!),
+              child: HomeErrorBanner(
+                message: _errorMessage!,
+                onSettings: () => LocationService.openAppSettings(),
+              ),
             ),
         ],
       ),
@@ -685,7 +725,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Au retour au premier plan (ex : permission changée dans les réglages),
+    // on revérifie la localisation si elle n'était pas disponible.
+    if (state == AppLifecycleState.resumed && _currentPosition == null && mounted) {
+      _fetchPosition();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _cameraDebounce?.cancel();
     _vehiculeTimer?.cancel();
     _positionStreamSub?.cancel();
