@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,14 +30,10 @@ Future<void> main() async {
 
   debugPrint('✅ Supabase OK');
 
-  // Charge et met en cache les arrêts (44 gares) + walking edges, une seule
-  // fois au démarrage. Non bloquant fatal : en cas d'échec, le routing
-  // continue de fonctionner sans les arrêts Supabase.
-  await ArretService.instance.initialize().timeout(
-    const Duration(seconds: 8),
-    onTimeout: () =>
-        debugPrint('⚠️ ArretService: timeout au démarrage (chargement différé)'),
-  );
+  // Chargement des arrêts (44 gares) + walking edges en ARRIÈRE-PLAN, une seule
+  // fois. Non bloquant : l'UI démarre immédiatement et le routing enrichit les
+  // correspondances dès que le cache est prêt (échec/lenteur sans impact).
+  unawaited(ArretService.instance.initialize());
 
   runApp(const TransitCIApp());
 }
