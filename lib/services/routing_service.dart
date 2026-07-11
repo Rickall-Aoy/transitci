@@ -9,6 +9,22 @@ class RoutingService {
   /// Définies au début de [_calculer] et lue par les fonctions de temps/score.
   static ConditionsTrafic _conditionsActives = const ConditionsTrafic();
 
+  /// Plafond strict de marche (en mètres) par jambe d'accès/sortie (~18 min à 4 km/h).
+  /// Au-delà, un trajet est rejeté pour éviter les longues marches.
+  static const double _marcheMaxStricteMetres = 1200;
+
+  /// Plafond relâché utilisé uniquement en fallback (si aucun trajet ne passe
+  /// le plafond strict), pour ne jamais renvoyer une liste vide.
+  static const double _marcheMaxFallbackMetres = 3500;
+
+  /// Pénalité de score par minute de marche (en plus de la durée). Une minute
+  /// de marche « coûte » ainsi davantage qu'une minute assise dans un véhicule,
+  /// ce qui fait remonter les itinéraires avec le moins de marche.
+  static const double _penaliteMarcheParMinute = 1.5;
+
+  /// Plafond de marche courant (strict par défaut, relâché en fallback).
+  static double _maxMarcheMetres = _marcheMaxStricteMetres;
+
   static List<Trajet> calculerTrajets({
     required double userLat,
     required double userLon,
@@ -64,6 +80,23 @@ class RoutingService {
   static List<Trajet> _calculer({required _RoutingOptions options}) {
     _conditionsActives = options.conditions;
 
+    // Passe 1 : plafond de marche strict (itinéraires confortables).
+    _maxMarcheMetres = _marcheMaxStricteMetres;
+    var trajets = _genererTrajets(options);
+
+    // Fallback anti-liste-vide : si le plafond strict ne laisse passer aucun
+    // trajet, on le relâche pour ne jamais renvoyer une liste vide.
+    if (trajets.isEmpty) {
+      _maxMarcheMetres = _marcheMaxFallbackMetres;
+      trajets = _genererTrajets(options);
+    }
+
+    trajets.sort((a, b) => a.score.compareTo(b.score));
+    final deduped = _dedupeTrajets(trajets);
+    return deduped.take(3).toList();
+  }
+
+  static List<Trajet> _genererTrajets(_RoutingOptions options) {
     final trajets = <Trajet>[];
     final filteredLignes = options.lignes
         .where((l) => !options.lignesExclues.contains(l.id))
@@ -159,14 +192,12 @@ class RoutingService {
         ],
         dureeTotal: tempsMarche,
         prixTotal: 0,
-        score: _score(duree: tempsMarche, prix: 0, correspondances: 0),
+        score: _score(duree: tempsMarche, prix: 0, correspondances: 0, marcheMinutes: tempsMarche),
         resume: '🚶 Marche directe (~${tempsMarche} min)',
       ));
     }
 
-    trajets.sort((a, b) => a.score.compareTo(b.score));
-    final deduped = _dedupeTrajets(trajets);
-    return deduped.take(3).toList();
+    return trajets;
   }
 
   static List<Ligne> _lignesProches({
@@ -289,7 +320,8 @@ class RoutingService {
       lat2: destLat, lon2: destLon,
     );
 
-    if (distUserArret > 8000) return null;
+    if (distUserArret > _maxMarcheMetres) return null;
+    if (distArretDest > _maxMarcheMetres) return null;
 
     final tempsAPied1 = _tempsAPied(distUserArret);
     final tempsTransport = _estimerTempsTransport(ligne.type, heure);
@@ -338,7 +370,7 @@ class RoutingService {
       segments: segments,
       dureeTotal: duree,
       prixTotal: ligne.prix,
-      score: _score(duree: duree, prix: ligne.prix, correspondances: 0),
+      score: _score(duree: duree, prix: ligne.prix, correspondances: 0, marcheMinutes: tempsAPied1 + tempsAPied2),
       resume: _construireResumeDirect(
         tempsAPied1: tempsAPied1,
         ligne: ligne,
@@ -387,12 +419,13 @@ class RoutingService {
       lat1: userLat, lon1: userLon,
       lat2: arretDepart.latitude, lon2: arretDepart.longitude,
     );
-    if (distUserArret > 8000) return null;
+    if (distUserArret > _maxMarcheMetres) return null;
 
     final distArretDest = LocationService.distanceEnMetres(
       lat1: arretArrivee.latitude, lon1: arretArrivee.longitude,
       lat2: destLat, lon2: destLon,
     );
+    if (distArretDest > _maxMarcheMetres) return null;
 
     final tempsAPied1 = _tempsAPied(distUserArret);
     final tempsT1 = _estimerTempsTransport(ligne1.type, heure);
@@ -459,7 +492,7 @@ class RoutingService {
       segments: segments,
       dureeTotal: duree,
       prixTotal: prix,
-      score: _score(duree: duree, prix: prix, correspondances: 1),
+      score: _score(duree: duree, prix: prix, correspondances: 1, marcheMinutes: tempsAPied1 + tempsAPied2),
       resume: _construireResumeCorrespondance1(
         tempsAPied1: tempsAPied1,
         ligne1: ligne1,
@@ -500,12 +533,13 @@ class RoutingService {
       lat1: userLat, lon1: userLon,
       lat2: arretDepart.latitude, lon2: arretDepart.longitude,
     );
-    if (distUserArret > 8000) return null;
+    if (distUserArret > _maxMarcheMetres) return null;
 
     final distArretDest = LocationService.distanceEnMetres(
       lat1: arretArrivee.latitude, lon1: arretArrivee.longitude,
       lat2: destLat, lon2: destLon,
     );
+    if (distArretDest > _maxMarcheMetres) return null;
 
     final t0 = _tempsAPied(distUserArret);
     final t1 = _estimerTempsTransport(ligne1.type, heure);
@@ -578,7 +612,7 @@ class RoutingService {
       segments: segments,
       dureeTotal: duree,
       prixTotal: prix,
-      score: _score(duree: duree, prix: prix, correspondances: 2),
+      score: _score(duree: duree, prix: prix, correspondances: 2, marcheMinutes: t0 + t4),
       resume: _construireResumeCorrespondance2(
         ligne1: ligne1, ligne2: ligne2, ligne3: ligne3,
         arretArrivee: arretArrivee,
@@ -604,7 +638,7 @@ class RoutingService {
       lat1: userLat, lon1: userLon,
       lat2: arretMontee.arret.latitude, lon2: arretMontee.arret.longitude,
     );
-    if (distMontee > 2500) return null;
+    if (distMontee > _maxMarcheMetres) return null;
 
     Ligne? meilleureCible;
     Arret? arretCibleProche;
@@ -636,6 +670,7 @@ class RoutingService {
       lat1: arretCibleProche.latitude, lon1: arretCibleProche.longitude,
       lat2: destLat, lon2: destLon,
     );
+    if (distArretCibleDest > _maxMarcheMetres) return null;
 
     final t0 = _tempsAPied(distMontee);
     final t1 = _estimerTempsTransport(woroWoro.type, heure);
@@ -713,7 +748,7 @@ class RoutingService {
       segments: segments,
       dureeTotal: duree,
       prixTotal: prix,
-      score: _score(duree: duree, prix: prix, correspondances: 2),
+      score: _score(duree: duree, prix: prix, correspondances: 2, marcheMinutes: t0 + t2 + t4),
       resume: '🚕 ${_labelType(woroWoro.type)} + ${_labelType(meilleureCible.type)} vers ${arretCibleProche.nom}',
     );
   }
@@ -826,8 +861,16 @@ class RoutingService {
     return (base * facteur).round();
   }
 
-  static double _score({required int duree, required int prix, required int correspondances}) {
+  static double _score({
+    required int duree,
+    required int prix,
+    required int correspondances,
+    int marcheMinutes = 0,
+  }) {
     var s = duree + prix * 2.0 + correspondances * 5;
+    // Pénalité de marche : chaque minute à pied compte plus qu'une minute
+    // assise, ce qui fait remonter les itinéraires avec le moins de marche.
+    s += marcheMinutes * _penaliteMarcheParMinute;
     // Sous la pluie, chaque correspondance devient un point d'exposition/attente
     // supplémentaire : on pénalise davantage les trajets à plusieurs correspondances.
     if (_conditionsActives.pluie) s += correspondances * 4;
