@@ -1,23 +1,31 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/location_service.dart';
+import '../services/navigation_service.dart';
+import '../services/guide_service.dart';
 import '../models/trajet.dart';
 import '../services/settings_service.dart';
 import '../app_theme.dart';
+import '../widgets/ai_guide_overlay.dart';
 
 class NavigationScreen extends StatefulWidget {
   final Trajet trajet;
   final double destLat;
   final double destLon;
+  final double? userLat;
+  final double? userLon;
 
   const NavigationScreen({
     super.key,
     required this.trajet,
     required this.destLat,
     required this.destLon,
+    this.userLat,
+    this.userLon,
   });
 
   @override
@@ -43,6 +51,16 @@ class _NavigationScreenState extends State<NavigationScreen>
   late AnimationController _pulseController;
   late Animation<double> _panelAnimation;
   late Animation<double> _pulseAnimation;
+
+  final NavigationService _navService = NavigationService();
+  StreamSubscription<NavigationSnapshot>? _navSubscription;
+  LatLng? _liveUserPosition;
+  bool _isNavigating = false;
+  bool _autoRecenter = true;
+  String _nextInstruction = 'Tape sur play pour démarrer le guidage';
+  int _remainingMinutes = 0;
+  double _remainingMeters = 0;
+  bool _hasArrived = false;
 
   bool get _isNight {
     if (!_autoTheme) return false;
@@ -71,6 +89,28 @@ class _NavigationScreenState extends State<NavigationScreen>
   Segment get _segmentCourant => widget.trajet.segments[
       _segmentActif.clamp(0, widget.trajet.segments.length - 1)];
 
+  Segment? _findActiveSegment() {
+    if (_routePoints.isEmpty || widget.trajet.segments.isEmpty) return null;
+
+    var best = widget.trajet.segments.first;
+    var bestDist = double.infinity;
+    for (final s in widget.trajet.segments) {
+      final midLat = (s.deLatitude + s.versLatitude) / 2;
+      final midLon = (s.deLongitude + s.versLongitude) / 2;
+      final d = LocationService.distanceEnMetres(
+        lat1: _userLat ?? widget.destLat,
+        lon1: _userLon ?? widget.destLon,
+        lat2: midLat,
+        lon2: midLon,
+      );
+      if (d < bestDist) {
+        bestDist = d;
+        best = s;
+      }
+    }
+    return best;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +134,10 @@ class _NavigationScreenState extends State<NavigationScreen>
 
     _loadSettings();
     _initialiserNavigation();
+    GuideService().start();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      GuideService().triggerStep(GuideStep.navigating);
+    });
   }
 
   Future<void> _loadSettings() async {
@@ -104,9 +148,17 @@ class _NavigationScreenState extends State<NavigationScreen>
 
   Future<void> _initialiserNavigation() async {
     try {
-      final position = await LocationService.getCurrentPosition();
-      _userLat = position.latitude;
-      _userLon = position.longitude;
+      double? positionLat = widget.userLat;
+      double? positionLon = widget.userLon;
+
+      if (positionLat == null || positionLon == null) {
+        final position = await LocationService.getCurrentPosition();
+        positionLat = position.latitude;
+        positionLon = position.longitude;
+      }
+
+      _userLat = positionLat;
+      _userLon = positionLon;
 
       await _tracerTousLesSegments();
       _placerMarqueurs();
@@ -180,6 +232,13 @@ class _NavigationScreenState extends State<NavigationScreen>
       });
     }
 
+    final activeSegment = _findActiveSegment();
+    _navService.configure(
+      destination: LatLng(widget.destLat, widget.destLon),
+      routePoints: allPoints,
+      activeSegment: activeSegment,
+    );
+
     await Future.delayed(const Duration(milliseconds: 300));
     _ajusterCamera();
   }
@@ -195,7 +254,10 @@ class _NavigationScreenState extends State<NavigationScreen>
         '?overview=full&geometries=geojson',
       );
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 6),
+        onTimeout: () => http.Response('', 408),
+      );
       if (response.statusCode != 200) return [];
 
       final data = jsonDecode(response.body);
@@ -220,6 +282,16 @@ class _NavigationScreenState extends State<NavigationScreen>
         position: LatLng(_userLat!, _userLon!),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
         infoWindow: const InfoWindow(title: 'Ma position'),
+      ));
+    }
+
+    if (_liveUserPosition != null) {
+      markers.add(Marker(
+        markerId: const MarkerId('live_user'),
+        position: _liveUserPosition!,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        anchor: const Offset(0.5, 0.5),
+        infoWindow: const InfoWindow(title: 'Position actuelle'),
       ));
     }
 
@@ -292,6 +364,97 @@ class _NavigationScreenState extends State<NavigationScreen>
         ),
       );
     }
+  }
+
+  Future<void> _startNavigation() async {
+    if (_routePoints.isEmpty) return;
+    final active = _findActiveSegment();
+    _navService.configure(
+      destination: LatLng(widget.destLat, widget.destLon),
+      routePoints: _routePoints,
+      activeSegment: active,
+    );
+
+    setState(() {
+      _isNavigating = true;
+      _hasArrived = false;
+    });
+
+    _navSubscription = _navService.startNavigation().listen(
+      _onNavigationSnapshot,
+      onError: (e) {
+        debugPrint('Navigation error: $e');
+      },
+    );
+  }
+
+  Future<void> _stopNavigation() async {
+    await _navSubscription?.cancel();
+    _navSubscription = null;
+    _navService.stopNavigation();
+    setState(() {
+      _isNavigating = false;
+      _hasArrived = false;
+      _nextInstruction = 'Guidage arrêté';
+      _remainingMinutes = 0;
+      _remainingMeters = 0;
+      _liveUserPosition = null;
+    });
+  }
+
+  void _onNavigationSnapshot(NavigationSnapshot snapshot) {
+    if (!mounted) return;
+    setState(() {
+      _liveUserPosition = snapshot.snappedPosition ?? snapshot.position;
+      _nextInstruction = snapshot.nextInstruction;
+      _remainingMinutes = snapshot.remainingMinutes;
+      _remainingMeters = snapshot.remainingMeters;
+      _hasArrived = snapshot.hasArrived;
+    });
+
+    if (snapshot.hasArrived) {
+      _onArrived();
+    }
+
+    if (_autoRecenter && _mapController != null && snapshot.snappedPosition != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(snapshot.snappedPosition!, 17.5),
+      );
+    }
+  }
+
+  void _onArrived() {
+    _stopNavigation();
+    GuideService().triggerStep(GuideStep.arrived);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Color(0xFF00C896), size: 28),
+            SizedBox(width: 10),
+            Text('Tu es arrivé'),
+          ],
+        ),
+        content: Text(
+          'Tu as atteint ${widget.trajet.segments.last.description}.',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleRecenter() {
+    setState(() => _autoRecenter = !_autoRecenter);
+    _navService.toggleRecenter();
   }
 
   @override
@@ -396,30 +559,86 @@ class _NavigationScreenState extends State<NavigationScreen>
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    _ajusterCamera();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: _bgColor.withValues(alpha: 0.9),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: _isNight
-                              ? AppTheme.darkStroke
-                              : Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: Icon(Icons.zoom_out_map,
-                        color: _couleurPrincipale, size: 20),
-                  ),
-                ),
+                 const SizedBox(width: 10),
+                 GestureDetector(
+                   onTap: () {
+                     HapticFeedback.lightImpact();
+                     _ajusterCamera();
+                   },
+                   child: Container(
+                     padding: const EdgeInsets.all(10),
+                     decoration: BoxDecoration(
+                       color: _bgColor.withValues(alpha: 0.9),
+                       shape: BoxShape.circle,
+                       boxShadow: [
+                         BoxShadow(
+                           color: _isNight
+                               ? AppTheme.darkStroke
+                               : Colors.black.withValues(alpha: 0.2),
+                           blurRadius: 8,
+                         ),
+                       ],
+                     ),
+                     child: Icon(Icons.zoom_out_map,
+                         color: _couleurPrincipale, size: 20),
+                   ),
+                 ),
+                 if (_mapController != null) ...[
+                   const SizedBox(width: 8),
+                   GestureDetector(
+                     onTap: _isNavigating ? _stopNavigation : _startNavigation,
+                     child: Container(
+                       padding: const EdgeInsets.all(10),
+                       decoration: BoxDecoration(
+                         color: _isNavigating
+                             ? Colors.red.shade600
+                             : AppTheme.primary,
+                         shape: BoxShape.circle,
+                         boxShadow: [
+                           BoxShadow(
+                             color: (_isNavigating ? Colors.red : AppTheme.primary)
+                                 .withValues(alpha: 0.4),
+                             blurRadius: 12,
+                             offset: const Offset(0, 3),
+                           ),
+                         ],
+                       ),
+                       child: Icon(
+                         _isNavigating ? Icons.stop_rounded : Icons.navigation_rounded,
+                         color: Colors.white,
+                         size: 20,
+                       ),
+                     ),
+                   ),
+                   if (_isNavigating)
+                     GestureDetector(
+                       onTap: _toggleRecenter,
+                       child: Container(
+                         padding: const EdgeInsets.all(10),
+                         decoration: BoxDecoration(
+                           color: _bgColor.withValues(alpha: 0.9),
+                           shape: BoxShape.circle,
+                           border: Border.all(
+                             color: _autoRecenter ? AppTheme.primary : Colors.transparent,
+                             width: 1.5,
+                           ),
+                           boxShadow: [
+                             BoxShadow(
+                               color: _isNight
+                                   ? AppTheme.darkStroke
+                                   : Colors.black.withValues(alpha: 0.2),
+                               blurRadius: 8,
+                             ),
+                           ],
+                         ),
+                         child: Icon(
+                           _autoRecenter ? Icons.gps_fixed : Icons.gps_off,
+                           color: _autoRecenter ? AppTheme.primary : _textColor,
+                           size: 20,
+                         ),
+                       ),
+                     ),
+                 ],
               ],
             ),
           ),
@@ -541,6 +760,8 @@ class _NavigationScreenState extends State<NavigationScreen>
               ),
             ),
 
+            if (_isNavigating) _buildNavigationGuidance(),
+
             _buildEtapeCourante(),
 
             const SizedBox(height: 14),
@@ -651,8 +872,89 @@ class _NavigationScreenState extends State<NavigationScreen>
                 ],
               ),
             ),
+            // ── Guide IA animé ──
+            if (GuideService().isActive)
+              Positioned.fill(child: const AiGuideOverlay()),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNavigationGuidance() {
+    final guidanceColor = _hasArrived ? const Color(0xFF00C896) : _couleurPrincipale;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: guidanceColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: guidanceColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: guidanceColor.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _hasArrived ? Icons.check_circle : Icons.navigation,
+              color: guidanceColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _hasArrived ? 'Arrivé' : 'Prochaine manœuvre',
+                  style: TextStyle(
+                    color: guidanceColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  _nextInstruction,
+                  style: TextStyle(
+                    color: _textColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${_remainingMinutes} min',
+                style: TextStyle(
+                  color: _textColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                '${(_remainingMeters / 1000).toStringAsFixed(1)} km',
+                style: TextStyle(
+                  color: _subTextColor,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -821,6 +1123,8 @@ class _NavigationScreenState extends State<NavigationScreen>
 
   @override
   void dispose() {
+    _navSubscription?.cancel();
+    _navService.stopNavigation();
     _panelController.dispose();
     _pulseController.dispose();
     _mapController?.dispose();

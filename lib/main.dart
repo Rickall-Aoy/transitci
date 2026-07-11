@@ -11,6 +11,7 @@ import 'screens/chauffeur/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/passager/map_screen.dart';
 import 'screens/passager/search_screen.dart';
+import 'screens/demo_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +50,7 @@ class TransitCIApp extends StatelessWidget {
         '/chauffeur/home': (context) => const ChauffeurNavigation(),
         '/chauffeur': (context) => const ChauffeurNavigation(),
         '/assistant': (context) => const AssistantScreen(),
+        '/demo': (context) => const DemoScreen(),
       },
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (_) => const _PlaceholderScreen(

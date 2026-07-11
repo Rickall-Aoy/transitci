@@ -179,7 +179,11 @@ class _StatsScreenState extends State<StatsScreen> {
           const SizedBox(height: 8),
           Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
           const SizedBox(height: 2),
-          Text(valeur, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w500)),
+          Text(valeur,
+              style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF0A0A0A))),
           if (sousTexte != null) ...[
             const SizedBox(height: 2),
             Text(sousTexte, style: const TextStyle(fontSize: 11, color: Colors.black38)),

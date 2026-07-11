@@ -115,7 +115,10 @@ class _GainsScreenState extends State<GainsScreen> {
                   const SizedBox(height: 20),
                   const Text(
                     'Historique',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF0A0A0A)),
                   ),
                   const SizedBox(height: 10),
                   if (_trajets.isEmpty)

@@ -28,6 +28,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.14.0
 flutter:
   uses-material-design: true
   assets:
@@ -35,3 +36,9 @@ flutter:
     - assets/lottie/
     - assets/gtfs/
     - assets/env/
+    - assets/images/
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21

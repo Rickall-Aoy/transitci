@@ -157,8 +157,11 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
           child: TextField(
             controller: _controller,
             focusNode: _focusNode,
+            cursorColor: AppTheme.primary,
             style: TextStyle(color: _textColor),
             decoration: InputDecoration(
+              filled: true,
+              fillColor: _bgColor,
               hintText: 'Destination (ex: Sococé, Bingerville...)',
               hintStyle: TextStyle(color: _subColor, fontSize: 14),
               prefixIcon: const Icon(Icons.search,
@@ -188,6 +191,8 @@ class _SearchDestinationWidgetState extends State<SearchDestinationWidget> {
                         )
                       : null,
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
                   vertical: 16, horizontal: 4),
             ),

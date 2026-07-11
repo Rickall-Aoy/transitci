@@ -102,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             'Espace chauffeur',
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.white70,
+                              color: Colors.white,
                               height: 1.5,
                             ),
                           ),
@@ -162,7 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscure ? Icons.visibility_off : Icons.visibility,
-                                  color: const Color(0xFF9E9E9E),
+                                  color: Colors.grey.shade600,
                                 ),
                                 onPressed: () => setState(() => _obscure = !_obscure),
                               ),
@@ -210,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Text('Pas encore inscrit ?', style: TextStyle(color: Color(0xFF9E9E9E))),
+                              Text('Pas encore inscrit ?', style: TextStyle(color: Colors.grey.shade600)),
                               TextButton(
                                 onPressed: () => Navigator.pushReplacementNamed(context, '/chauffeur/register'),
                                 child: const Text(

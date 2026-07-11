@@ -4,10 +4,13 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import '../config/gemini_config.dart';
 
 class GeminiService {
-  // Pour une clé/projet récent (2026), les modèles "fixes" comme
-  // gemini-2.5-flash sont fermés ("no longer available to new users").
-  // On utilise l'alias maintenu par Google qui pointe toujours vers le Flash
-  // gratuit recommandé. Repli si besoin : 'gemini-3-flash-preview'.
+  // Le modèle 'gemini-2.5-flash' est fermé aux nouveaux projets Google
+  // Cloud (erreur "no longer available to new users"). On utilise l'alias
+  // maintenu 'gemini-flash-latest' qui pointe toujours vers le modèle Flash
+  // gratuit recommandé — évite d'être bloqué si Google change encore de
+  // génération par défaut. Repli possible : 'gemini-3-flash-preview'
+  // (confirmé disponible, modèle gratuit recommandé pour les nouveaux
+  // projets).
   static const String _modelName = 'gemini-flash-latest';
 
   // Version d'API (doit correspondre à l'URL testée manuellement : v1beta).
@@ -99,8 +102,8 @@ Ton rôle :
       }
     }
 
-    // Retry simple avec backoff (utile pour les 429 minoritaires).
-    const int maxRetries = 1;
+    // Retry simple avec backoff (utile pour les 429 / charge temporaire).
+    const int maxRetries = 2;
     for (int attempt = 0;; attempt++) {
       final buffer = StringBuffer();
       try {
@@ -109,7 +112,9 @@ Ton rôle :
           final part = response.text;
           if (part != null && part.isNotEmpty) {
             buffer.write(part);
-            yield buffer.toString();
+            // On diffuse le delta (texte du chunk), pas le texte cumulé :
+            // les consommateurs (guide_service, assistant) recomposent eux-mêmes.
+            yield part;
           }
         }
         if (buffer.isEmpty) {
@@ -121,26 +126,31 @@ Ton rôle :
         final msg = e.toString();
         debugPrint('❌ Gemini erreur (tentative $attempt): $msg');
 
-        // 404 = modèle introuvable pour cette clé/région : retry inutile.
         final is404 =
             msg.contains('404') || msg.toLowerCase().contains('not found');
         if (is404) {
           yield _messageModeleIntrouvable;
           return;
         }
+
+        final isChargeElevee = msg.toLowerCase().contains('high demand') || msg.toLowerCase().contains('429');
+
         if (attempt < maxRetries) {
-          await Future.delayed(const Duration(seconds: 2)); // backoff simple
+          await Future.delayed(isChargeElevee ? const Duration(seconds: 8) : const Duration(seconds: 2));
           continue;
         }
-        // 429 / réseau : on n'affiche jamais le message technique brut.
+
         if (buffer.isEmpty) {
-          yield _messageIndisponible;
+          yield isChargeElevee
+              ? "🤖 Service momentanément surchargé. Réessaie dans 30 secondes."
+              : _messageIndisponible;
         } else {
           yield "${buffer.toString()}\n\n⚠️ Réponse interrompue.";
         }
         return;
       }
     }
+
   }
 
   static String get _messageSansCle =>

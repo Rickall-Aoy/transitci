@@ -122,6 +122,14 @@ class _TutorialScreenState extends State<TutorialScreen>
     _entryController.forward();
   }
 
+  @override
+  void dispose() {
+    _floatController.dispose();
+    _entryController.dispose();
+    _pageController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSettings() async {
     final auto = await SettingsService.getAutoTheme();
     setState(() => _autoTheme = auto);

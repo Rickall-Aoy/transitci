@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/trajet.dart';
+import '../models/conditions_trafic.dart';
 import '../services/location_service.dart';
 import '../services/settings_service.dart';
 import '../services/yango_estimate_service.dart';
+import '../services/guide_service.dart';
+import '../services/tip_service.dart';
 import '../app_theme.dart';
+import '../widgets/ai_guide_overlay.dart';
 import 'navigation_screen.dart';
 
 enum Priorite { economique, rapide, equilibre }
@@ -16,6 +20,7 @@ class ResultsScreen extends StatefulWidget {
   final double? destLon;
   final double? userLat;
   final double? userLon;
+  final ConditionsTrafic conditions;
 
   const ResultsScreen({
     super.key,
@@ -25,6 +30,7 @@ class ResultsScreen extends StatefulWidget {
     this.destLon,
     this.userLat,
     this.userLon,
+    this.conditions = const ConditionsTrafic(),
   });
 
   @override
@@ -76,6 +82,14 @@ class _ResultsScreenState extends State<ResultsScreen>
     });
 
     _listController.forward();
+    GuideService().start();
+    GuideService().triggerStep(GuideStep.resultsShown, destination: widget.destination);
+    GuideService().showTip(TipService.instance.getTip(
+      TipEvent.resultsShown,
+      heure: DateTime.now().hour,
+      conditions: widget.conditions,
+      destination: widget.destination,
+    ));
   }
 
   Future<void> _loadSettings() async {
@@ -129,13 +143,20 @@ class _ResultsScreenState extends State<ResultsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bgColor,
-      body: Column(
+      body: Stack(
         children: [
-          _buildHeader(),
-          if (_options.isNotEmpty) _buildPrioriteFilter(),
-          Expanded(
-            child: _buildContenu(),
+          Column(
+            children: [
+              _buildHeader(),
+              if (widget.conditions.actif) _buildConditionsBanner(),
+              if (_options.isNotEmpty) _buildPrioriteFilter(),
+              Expanded(
+                child: _buildContenu(),
+              ),
+            ],
           ),
+          if (GuideService().isActive)
+            Positioned.fill(child: const AiGuideOverlay()),
         ],
       ),
     );
@@ -219,6 +240,41 @@ class _ResultsScreenState extends State<ResultsScreen>
                 color: Color(0xFFFF6B2B),
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConditionsBanner() {
+    final tags = <String>[];
+    if (widget.conditions.pluie) tags.add('🌧️ Pluie');
+    if (widget.conditions.embouteillage) tags.add('🚦 Embouteillages');
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF6B2B).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: const Color(0xFFFF6B2B).withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded,
+              size: 16, color: const Color(0xFFFF6B2B)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Simulation active : ${tags.join(' · ')}'
+              ' — les temps et le classement en tiennent compte.',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFFFF6B2B),
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -502,6 +558,8 @@ class _ResultsScreenState extends State<ResultsScreen>
               trajet: trajet,
               destLat: widget.destLat ?? 0,
               destLon: widget.destLon ?? 0,
+              userLat: widget.userLat,
+              userLon: widget.userLon,
             ),
             transitionsBuilder: (_, animation, __, child) {
               return SlideTransition(

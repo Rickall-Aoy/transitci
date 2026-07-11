@@ -211,13 +211,18 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
             ),
             child: TextField(
               controller: _nomController,
+              cursorColor: AppTheme.primary,
               style: TextStyle(color: _textColor),
               decoration: InputDecoration(
+                filled: true,
+                fillColor: _surfaceColor,
                 hintText: _isProbleme
                     ? 'Ex: Arret dangereux, manque de signalisation...'
                     : 'Ex: Carrefour CHU, Marche Cocody...',
                 hintStyle: TextStyle(color: _subColor, fontSize: 13),
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               ),
@@ -261,7 +266,7 @@ class _SignalerArretWidgetState extends State<SignalerArretWidget> {
                           _labelType(type),
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: selected ? couleur : _subColor,
+                            color: selected ? _textColor : _subColor,
                             fontSize: 9,
                             fontWeight: FontWeight.w600,
                           ),

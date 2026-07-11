@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app_theme.dart';
 import '../../config/gemini_config.dart';
 import '../../services/gemini_service.dart';
+import '../../services/guide_service.dart';
 
 class AssistantScreen extends StatefulWidget {
   const AssistantScreen({super.key});
@@ -19,6 +21,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
   bool _isConfigured = false;
   bool _isStreaming = false;
+  StreamSubscription<GuideMessage>? _guideSub;
 
   @override
   void initState() {
@@ -26,10 +29,20 @@ class _AssistantScreenState extends State<AssistantScreen> {
     _initAssistant();
   }
 
+  @override
+  void dispose() {
+    _guideSub?.cancel();
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   Future<void> _initAssistant() async {
     final key = await GeminiConfig.apiKey;
     setState(() => _isConfigured = key.isNotEmpty);
     if (_isConfigured) await GeminiService.init();
+
+    GuideService().start();
 
     if (mounted && _messages.isEmpty) {
       setState(() {
@@ -59,30 +72,47 @@ class _AssistantScreenState extends State<AssistantScreen> {
     _scrollToBottom();
 
     final assistantIndex = _messages.length - 1;
+    final context = _buildContext();
 
-    await for (final partial in GeminiService.sendMessage(text)) {
-      if (!mounted) return;
-      setState(() {
-        _messages[assistantIndex] = _Message(
-          text: partial,
-          isUser: false,
-          isTyping: false,
-        );
-      });
-      _scrollToBottom();
-    }
+    await _guideSub?.cancel();
+    GuideService().start();
 
-    setState(() {
-      _isStreaming = false;
-      _messages[assistantIndex] = _Message(
-        text: _messages[assistantIndex].text.isEmpty
-            ? "⚠️ Pas de réponse."
-            : _messages[assistantIndex].text,
-        isUser: false,
-        isTyping: false,
-      );
-    });
-    _scrollToBottom();
+    _guideSub = GuideService().askQuestionStream(text, context: context).listen(
+      (msg) {
+        if (!mounted) return;
+        setState(() {
+          _messages[assistantIndex] = _Message(
+            text: msg.text.isEmpty ? '⚠️ Pas de réponse.' : msg.text,
+            isUser: false,
+            isTyping: false,
+          );
+        });
+        _scrollToBottom();
+      },
+      onDone: () {
+        if (!mounted) return;
+        setState(() => _isStreaming = false);
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _messages[assistantIndex] = _Message(
+            text: '⚠️ Réponse indisponible.',
+            isUser: false,
+            isTyping: false,
+          );
+          _isStreaming = false;
+        });
+      },
+    );
+  }
+
+  String _buildContext() {
+    final h = DateTime.now().hour;
+    final periode = h < 9 ? 'matin' : h < 17 ? 'journée' : h < 21 ? 'soir' : 'nuit';
+    return 'Heure : ${h}h. Période : $periode. '
+        'Position utilisateur : non renseignée ici. '
+        'Préférence utilisateur : bus privilégié, accepte les correspondances.';
   }
 
   void _resetConversation() {
@@ -167,13 +197,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
         );
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _scrollController.dispose();
-    super.dispose();
   }
 
   @override

@@ -1,9 +1,13 @@
+import '../models/conditions_trafic.dart';
 import '../models/gare.dart';
 import '../models/ligne.dart';
 import '../models/trajet.dart';
 import 'location_service.dart';
 
 class RoutingService {
+  /// Conditions de trafic actives pendant le calcul courant (pluie / embouteillage).
+  /// Définies au début de [_calculer] et lue par les fonctions de temps/score.
+  static ConditionsTrafic _conditionsActives = const ConditionsTrafic();
 
   static List<Trajet> calculerTrajets({
     required double userLat,
@@ -12,52 +16,113 @@ class RoutingService {
     required double destLon,
     required List<Ligne> lignes,
     required int heure,
+    ConditionsTrafic conditions = const ConditionsTrafic(),
   }) {
-    final List<Trajet> trajets = [];
-    final lignesDepart = _lignesProches(
+    return _calculer(options: _RoutingOptions(
+      userLat: userLat,
+      userLon: userLon,
+      destLat: destLat,
+      destLon: destLon,
       lignes: lignes,
-      lat: userLat,
-      lon: userLon,
+      heure: heure,
+      conditions: conditions,
+    ));
+  }
+
+  static List<Trajet> calculerAvecContraintes({
+    required double userLat,
+    required double userLon,
+    required double destLat,
+    required double destLon,
+    required List<Ligne> lignes,
+    required int heure,
+    List<String>? lignesExcluesIds,
+    bool prioriteWoroWoro = false,
+    ConditionsTrafic conditions = const ConditionsTrafic(),
+  }) {
+    final excluded = <String>{};
+    if (lignesExcluesIds != null) excluded.addAll(lignesExcluesIds);
+    if (prioriteWoroWoro) {
+      for (final l in lignes) {
+        if (l.type != TransportType.woroWoro) excluded.add(l.id);
+      }
+    }
+
+    return _calculer(options: _RoutingOptions(
+      userLat: userLat,
+      userLon: userLon,
+      destLat: destLat,
+      destLon: destLon,
+      lignes: lignes,
+      heure: heure,
+      lignesExclues: excluded,
+      forcerWoroWoro: prioriteWoroWoro,
+      conditions: conditions,
+    ));
+  }
+
+  static List<Trajet> _calculer({required _RoutingOptions options}) {
+    _conditionsActives = options.conditions;
+
+    final trajets = <Trajet>[];
+    final filteredLignes = options.lignes
+        .where((l) => !options.lignesExclues.contains(l.id))
+        .toList();
+
+    final lignesDepart = _lignesProches(
+      lignes: filteredLignes,
+      lat: options.userLat,
+      lon: options.userLon,
     );
     final lignesDestination = _lignesProches(
-      lignes: lignes,
-      lat: destLat,
-      lon: destLon,
+      lignes: filteredLignes,
+      lat: options.destLat,
+      lon: options.destLon,
     );
-    final lignesDirectes =
-        _dedupeLignes([...lignesDepart, ...lignesDestination]);
+    final lignesDirectes = _dedupeLignes([...lignesDepart, ...lignesDestination]);
 
-    // ── 1. Trajets directs (1 seule ligne) ──
     for (final ligne in lignesDirectes) {
       final t = _trajetDirect(
-        userLat: userLat, userLon: userLon,
-        destLat: destLat, destLon: destLon,
-        ligne: ligne, heure: heure,
+        userLat: options.userLat, userLon: options.userLon,
+        destLat: options.destLat, destLon: options.destLon,
+        ligne: ligne, heure: options.heure,
       );
       if (t != null) trajets.add(t);
     }
 
-    // ── 2. Trajets avec 1 correspondance ──
+    final woroWoroProches = options.forcerWoroWoro
+        ? _dedupeLignes(filteredLignes).where((l) => l.type == TransportType.woroWoro).toList()
+        : _lignesWoroWoroProches(filteredLignes, options.userLat, options.userLon);
+    for (final woro in woroWoroProches) {
+      final t = _trajetRaccordementWoroWoro(
+        userLat: options.userLat, userLon: options.userLon,
+        destLat: options.destLat, destLon: options.destLon,
+        woroWoro: woro,
+        lignesCibles: lignesDirectes,
+        heure: options.heure,
+      );
+      if (t != null) trajets.add(t);
+    }
+
     for (final l1 in lignesDepart) {
       for (final l2 in lignesDestination) {
         if (l1.id == l2.id) continue;
         final t = _trajetCorrespondance(
-          userLat: userLat, userLon: userLon,
-          destLat: destLat, destLon: destLon,
-          ligne1: l1, ligne2: l2, heure: heure,
+          userLat: options.userLat, userLon: options.userLon,
+          destLat: options.destLat, destLon: options.destLon,
+          ligne1: l1, ligne2: l2, heure: options.heure,
         );
         if (t != null) trajets.add(t);
       }
     }
 
-    // ── 3. Trajets avec 2 correspondances (> 8km) ──
     final distTotale = LocationService.distanceEnMetres(
-      lat1: userLat, lon1: userLon,
-      lat2: destLat, lon2: destLon,
+      lat1: options.userLat, lon1: options.userLon,
+      lat2: options.destLat, lon2: options.destLon,
     );
 
     if (distTotale > 8000) {
-      final lignesIntermediaires = _dedupeLignes(lignes)
+      final lignesIntermediaires = _dedupeLignes(filteredLignes)
           .where((ligne) =>
               !lignesDepart.any((l) => l.id == ligne.id) &&
               !lignesDestination.any((l) => l.id == ligne.id))
@@ -69,9 +134,9 @@ class RoutingService {
           for (final l3 in lignesDestination.take(12)) {
             if (l1.id == l2.id || l2.id == l3.id || l1.id == l3.id) continue;
             final t = _trajetDoubleCorrespondance(
-              userLat: userLat, userLon: userLon,
-              destLat: destLat, destLon: destLon,
-              ligne1: l1, ligne2: l2, ligne3: l3, heure: heure,
+              userLat: options.userLat, userLon: options.userLon,
+              destLat: options.destLat, destLon: options.destLon,
+              ligne1: l1, ligne2: l2, ligne3: l3, heure: options.heure,
             );
             if (t != null) trajets.add(t);
           }
@@ -79,9 +144,29 @@ class RoutingService {
       }
     }
 
-    // Trier et garder les 3 meilleurs
+    if (distTotale <= 800 && distTotale > 0) {
+      final tempsMarche = _tempsAPied(distTotale);
+      trajets.add(Trajet(
+        segments: [
+          Segment(
+            type: TypeSegment.piedVersDest,
+            deLatitude: options.userLat, deLongitude: options.userLon,
+            versLatitude: options.destLat, versLongitude: options.destLon,
+            dureeMinutes: tempsMarche,
+            prix: 0,
+            description: 'Marche directe vers ta destination (~${tempsMarche} min)',
+          ),
+        ],
+        dureeTotal: tempsMarche,
+        prixTotal: 0,
+        score: _score(duree: tempsMarche, prix: 0, correspondances: 0),
+        resume: '🚶 Marche directe (~${tempsMarche} min)',
+      ));
+    }
+
     trajets.sort((a, b) => a.score.compareTo(b.score));
-    return trajets.take(3).toList();
+    final deduped = _dedupeTrajets(trajets);
+    return deduped.take(3).toList();
   }
 
   static List<Ligne> _lignesProches({
@@ -109,6 +194,19 @@ class RoutingService {
         .toList();
   }
 
+  static double _rayonMetres(Ligne ligne) =>
+      ligne.type == TransportType.woroWoro ? 15000 : 1000;
+
+  static List<Ligne> _lignesWoroWoroProches(
+      List<Ligne> lignes, double lat, double lon) {
+    return _lignesProches(
+      lignes: lignes.where((l) => l.type == TransportType.woroWoro).toList(),
+      lat: lat,
+      lon: lon,
+      maxDistance: 12000,
+    );
+  }
+
   static List<Ligne> _dedupeLignes(List<Ligne> lignes) {
     final seen = <String>{};
     final result = <Ligne>[];
@@ -118,8 +216,16 @@ class RoutingService {
     return result;
   }
 
-  /// Cherche un point de correspondance entre deux lignes ET retourne
-  /// les index respectifs, pour permettre de valider le sens de chacune.
+  static List<Trajet> _dedupeTrajets(List<Trajet> trajets) {
+    final seen = <String>{};
+    final result = <Trajet>[];
+    for (final trajet in trajets) {
+      final key = trajet.resume;
+      if (seen.add(key)) result.add(trajet);
+    }
+    return result;
+  }
+
   static ({Arret arret, int indexLigne1, int indexLigne2})? _trouverCorrespondance(
       Ligne ligne1, Ligne ligne2) {
     final arrets1 = ligne1.tousLesArrets;
@@ -155,7 +261,7 @@ class RoutingService {
     required double destLat, required double destLon,
     required Ligne ligne, required int heure,
   }) {
-    if (!ligne.peutDesservir(userLat, userLon)) return null;
+    if (!ligne.peutDesservir(userLat, userLon, rayonMetres: _rayonMetres(ligne))) return null;
     if (!ligne.peutDesservir(destLat, destLon)) return null;
 
     final departInfo = ligne.arretLePlusProcheAvecIndex(userLat, userLon);
@@ -250,8 +356,8 @@ class RoutingService {
     required Ligne ligne1, required Ligne ligne2,
     required int heure,
   }) {
-    if (!ligne1.peutDesservir(userLat, userLon)) return null;
-    if (!ligne2.peutDesservir(destLat, destLon)) return null;
+    if (!ligne1.peutDesservir(userLat, userLon, rayonMetres: _rayonMetres(ligne1))) return null;
+    if (!ligne2.peutDesservir(destLat, destLon, rayonMetres: _rayonMetres(ligne2))) return null;
 
     final corr = _trouverCorrespondance(ligne1, ligne2);
     if (corr == null) return null;
@@ -259,8 +365,6 @@ class RoutingService {
     final departInfo = ligne1.arretLePlusProcheAvecIndex(userLat, userLon);
     final arriveeInfo = ligne2.arretLePlusProcheAvecIndex(destLat, destLon);
 
-    // Le point de correspondance doit être APRÈS le départ sur ligne1,
-    // et AVANT l'arrivée sur ligne2 — sinon le trajet remonte le sens.
     if (departInfo.index >= corr.indexLigne1) return null;
     if (corr.indexLigne2 >= arriveeInfo.index) return null;
 
@@ -373,8 +477,8 @@ class RoutingService {
     required Ligne ligne1, required Ligne ligne2, required Ligne ligne3,
     required int heure,
   }) {
-    if (!ligne1.peutDesservir(userLat, userLon)) return null;
-    if (!ligne3.peutDesservir(destLat, destLon)) return null;
+    if (!ligne1.peutDesservir(userLat, userLon, rayonMetres: _rayonMetres(ligne1))) return null;
+    if (!ligne3.peutDesservir(destLat, destLon, rayonMetres: _rayonMetres(ligne3))) return null;
 
     final corr1 = _trouverCorrespondance(ligne1, ligne2);
     if (corr1 == null) return null;
@@ -385,7 +489,6 @@ class RoutingService {
     final departInfo = ligne1.arretLePlusProcheAvecIndex(userLat, userLon);
     final arriveeInfo = ligne3.arretLePlusProcheAvecIndex(destLat, destLon);
 
-    // Validation du sens sur les 3 segments de la chaîne
     if (departInfo.index >= corr1.indexLigne1) return null;
     if (corr1.indexLigne2 >= corr2.indexLigne1) return null;
     if (corr2.indexLigne2 >= arriveeInfo.index) return null;
@@ -448,9 +551,8 @@ class RoutingService {
       Segment(
         type: TypeSegment.transport,
         deLatitude: corr2.arret.latitude, deLongitude: corr2.arret.longitude,
-        versLatitude: arretArrivee.latitude,
-        versLongitude: arretArrivee.longitude,
-        dureeMinutes: 5 + t3, prix: ligne3.prix,
+        versLatitude: arretArrivee.latitude, versLongitude: arretArrivee.longitude,
+        dureeMinutes: t3, prix: ligne3.prix,
         description: 'Prends ${_labelType(ligne3.type)} direction ${ligne3.terminusArrivee.nom}'
             ' — descends à ${arretArrivee.nom}',
         conseil: _conseilParType(ligne3.type, arretArrivee.nom),
@@ -463,12 +565,13 @@ class RoutingService {
         deLatitude: arretArrivee.latitude,
         deLongitude: arretArrivee.longitude,
         versLatitude: destLat, versLongitude: destLon,
-        dureeMinutes: t4, prix: 0,
+        dureeMinutes: t4,
+        prix: 0,
         description: 'Marche vers ta destination (~${t4} min)',
       ),
     ];
 
-    final duree = t0 + t1 + 5 + t2 + 5 + t3 + t4;
+    final duree = t0 + t1 + 5 + t2 + t3 + t4;
     final prix = ligne1.prix + ligne2.prix + ligne3.prix;
 
     return Trajet(
@@ -477,72 +580,145 @@ class RoutingService {
       prixTotal: prix,
       score: _score(duree: duree, prix: prix, correspondances: 2),
       resume: _construireResumeCorrespondance2(
-        tempsAPied1: t0,
-        ligne1: ligne1,
-        ligne2: ligne2,
-        ligne3: ligne3,
-        tempsAPied2: t4,
+        ligne1: ligne1, ligne2: ligne2, ligne3: ligne3,
         arretArrivee: arretArrivee,
       ),
     );
   }
 
+  // ── Raccordement Woro-Woro vers gare/ligne quand user trop loin ──
+  static Trajet? _trajetRaccordementWoroWoro({
+    required double userLat,
+    required double userLon,
+    required double destLat,
+    required double destLon,
+    required Ligne woroWoro,
+    required List<Ligne> lignesCibles,
+    required int heure,
+  }) {
+    if (woroWoro.type != TransportType.woroWoro) return null;
+    if (lignesCibles.isEmpty) return null;
+
+    final arretMontee = woroWoro.arretLePlusProcheAvecIndex(userLat, userLon);
+    final distMontee = LocationService.distanceEnMetres(
+      lat1: userLat, lon1: userLon,
+      lat2: arretMontee.arret.latitude, lon2: arretMontee.arret.longitude,
+    );
+    if (distMontee > 2500) return null;
+
+    Ligne? meilleureCible;
+    Arret? arretCibleProche;
+    double meilleureDistCible = double.infinity;
+
+    for (final cible in lignesCibles) {
+      if (cible.type == TransportType.woroWoro) continue;
+      final arretProche = cible.arretLePlusProcheAvecIndex(destLat, destLon);
+      final arretWoroProche = woroWoro.arretLePlusProcheAvecIndex(
+        arretProche.arret.latitude, arretProche.arret.longitude,
+      );
+      final distWoroGare = LocationService.distanceEnMetres(
+        lat1: arretWoroProche.arret.latitude, lon1: arretWoroProche.arret.longitude,
+        lat2: arretProche.arret.latitude, lon2: arretProche.arret.longitude,
+      );
+      if (distWoroGare <= 600 && distWoroGare < meilleureDistCible) {
+        meilleureDistCible = distWoroGare;
+        meilleureCible = cible;
+        arretCibleProche = arretProche.arret;
+      }
+    }
+
+    if (meilleureCible == null || arretCibleProche == null) return null;
+
+    final arretWoroPresGare = woroWoro.arretLePlusProcheAvecIndex(
+      arretCibleProche.latitude, arretCibleProche.longitude,
+    );
+    final distArretCibleDest = LocationService.distanceEnMetres(
+      lat1: arretCibleProche.latitude, lon1: arretCibleProche.longitude,
+      lat2: destLat, lon2: destLon,
+    );
+
+    final t0 = _tempsAPied(distMontee);
+    final t1 = _estimerTempsTransport(woroWoro.type, heure);
+    final t2 = _tempsAPied(meilleureDistCible);
+    final t3 = _estimerTempsTransport(meilleureCible.type, heure);
+    final t4 = _tempsAPied(distArretCibleDest);
+
+    final segments = [
+      Segment(
+        type: TypeSegment.piedVersGare,
+        deLatitude: userLat, deLongitude: userLon,
+        versLatitude: arretMontee.arret.latitude,
+        versLongitude: arretMontee.arret.longitude,
+        dureeMinutes: t0,
+        prix: 0,
+        description: 'Marche vers l\'arrêt ${woroWoro.nom} (~${t0} min)',
+        conseil: 'Prends un ${_labelType(woroWoro.type)} devant toi.',
+      ),
+      Segment(
+        type: TypeSegment.transport,
+        deLatitude: arretMontee.arret.latitude,
+        deLongitude: arretMontee.arret.longitude,
+        versLatitude: arretWoroPresGare.arret.latitude,
+        versLongitude: arretWoroPresGare.arret.longitude,
+        dureeMinutes: t1,
+        prix: woroWoro.prix,
+        description: 'Prends ${_labelType(woroWoro.type)} vers ${arretCibleProche.nom}'
+            ' — descends près de ${arretCibleProche.nom}',
+        conseil: _conseilParType(woroWoro.type, arretCibleProche.nom),
+        arretMontee: arretMontee.arret.nom,
+        arretDescente: arretCibleProche.nom,
+        couleurVehicule: woroWoro.couleurVehicule,
+      ),
+      Segment(
+        type: TypeSegment.piedVersGare,
+        deLatitude: arretWoroPresGare.arret.latitude,
+        deLongitude: arretWoroPresGare.arret.longitude,
+        versLatitude: arretCibleProche.latitude,
+        versLongitude: arretCibleProche.longitude,
+        dureeMinutes: t2,
+        prix: 0,
+        description: 'Marche vers ${arretCibleProche.nom} (~${t2} min)',
+      ),
+      Segment(
+        type: TypeSegment.transport,
+        deLatitude: arretCibleProche.latitude,
+        deLongitude: arretCibleProche.longitude,
+        versLatitude: destLat,
+        versLongitude: destLon,
+        dureeMinutes: t3,
+        prix: meilleureCible.prix,
+        description: 'Prends ${_labelType(meilleureCible.type)} direction ${meilleureCible.terminusArrivee.nom}'
+            ' — descends à ${arretCibleProche.nom}',
+        conseil: _conseilParType(meilleureCible.type, arretCibleProche.nom),
+        arretMontee: arretCibleProche.nom,
+        arretDescente: arretCibleProche.nom,
+        couleurVehicule: meilleureCible.couleurVehicule,
+      ),
+      Segment(
+        type: TypeSegment.piedVersDest,
+        deLatitude: destLat,
+        deLongitude: destLon,
+        versLatitude: destLat,
+        versLongitude: destLon,
+        dureeMinutes: t4,
+        prix: 0,
+        description: 'Marche vers ta destination (~${t4} min)',
+      ),
+    ];
+
+    final duree = t0 + t1 + t2 + t3 + t4;
+    final prix = woroWoro.prix + meilleureCible.prix;
+
+    return Trajet(
+      segments: segments,
+      dureeTotal: duree,
+      prixTotal: prix,
+      score: _score(duree: duree, prix: prix, correspondances: 2),
+      resume: '🚕 ${_labelType(woroWoro.type)} + ${_labelType(meilleureCible.type)} vers ${arretCibleProche.nom}',
+    );
+  }
+
   // ── Helpers ──
-
-  static int _tempsAPied(double metres) =>
-      (metres / 4000 * 60).round().clamp(1, 60);
-
-  static int _estimerTempsTransport(TransportType type, int heure) {
-    final pointe = (heure >= 7 && heure <= 9) || (heure >= 17 && heure <= 20);
-    final bonus = pointe ? 15 : 0;
-    switch (type) {
-      case TransportType.woroWoro: return 20 + bonus;
-      case TransportType.gbaka:    return 25 + bonus;
-      case TransportType.sotra:    return 30 + bonus;
-      case TransportType.yango:    return 15 + (bonus ~/ 2);
-    }
-  }
-
-  static double _score({
-    required int duree, required int prix, required int correspondances}) {
-    return (duree * 1.5) + (prix / 100) + (correspondances * 10.0);
-  }
-
-  static String _labelType(TransportType type) {
-    switch (type) {
-      case TransportType.woroWoro: return 'Woro-Woro';
-      case TransportType.gbaka:    return 'Gbaka';
-      case TransportType.sotra:    return 'SOTRA';
-      case TransportType.yango:    return 'Yango';
-    }
-  }
-
-  static String _emoji(TransportType type) {
-    switch (type) {
-      case TransportType.woroWoro: return '🚕';
-      case TransportType.gbaka:    return '🚐';
-      case TransportType.sotra:    return '🚌';
-      case TransportType.yango:    return '🚗';
-    }
-  }
-
-  static String _conseilParType(TransportType type, String arretDescente) {
-    switch (type) {
-      case TransportType.woroWoro:
-        return 'Assieds-toi à l\'avant et dis "$arretDescente" '
-            'au chauffeur avant d\'y arriver.';
-      case TransportType.gbaka:
-        return 'Crie "$arretDescente" quand tu approches. '
-            'Le gbaka s\'arrête à la demande.';
-      case TransportType.sotra:
-        return 'Arrêt fixe à "$arretDescente". '
-            'Surveille les panneaux d\'arrêt.';
-      case TransportType.yango:
-        return 'Le chauffeur connaît la destination. '
-            'Confirme l\'adresse au démarrage.';
-    }
-  }
-
   static String _construireResumeDirect({
     required int tempsAPied1,
     required Ligne ligne,
@@ -550,11 +726,9 @@ class RoutingService {
     required int tempsAPied2,
     required Arret arretArrivee,
   }) {
-    final parties = <String>[];
-    if (tempsAPied1 > 0) parties.add('🚶 $tempsAPied1 min');
-    parties.add('${_emoji(ligne.type)} ${_labelType(ligne.type)} vers ${arretArrivee.nom}');
-    if (tempsAPied2 > 0) parties.add('🚶 $tempsAPied2 min');
-    return parties.join(' → ');
+    final label = _labelType(ligne.type);
+    final total = tempsAPied1 + tempsTransport + tempsAPied2;
+    return '$label vers ${arretArrivee.nom} (~${total} min)';
   }
 
   static String _construireResumeCorrespondance1({
@@ -564,27 +738,123 @@ class RoutingService {
     required int tempsAPied2,
     required Arret arretArrivee,
   }) {
-    final parties = <String>[];
-    if (tempsAPied1 > 0) parties.add('🚶 $tempsAPied1 min');
-    parties.add('${_emoji(ligne1.type)} ${_labelType(ligne1.type)}');
-    parties.add('${_emoji(ligne2.type)} ${_labelType(ligne2.type)} vers ${arretArrivee.nom}');
-    if (tempsAPied2 > 0) parties.add('🚶 $tempsAPied2 min');
-    return parties.join(' → ');
+    final l1 = _labelType(ligne1.type);
+    final l2 = _labelType(ligne2.type);
+    final total = tempsAPied1 + 10 + tempsAPied2;
+    return '$l1 + $l2 vers ${arretArrivee.nom} (~${total} min)';
   }
 
   static String _construireResumeCorrespondance2({
-    required int tempsAPied1,
     required Ligne ligne1,
     required Ligne ligne2,
     required Ligne ligne3,
-    required int tempsAPied2,
     required Arret arretArrivee,
   }) {
-    final parties = <String>[];
-    if (tempsAPied1 > 0) parties.add('🚶 $tempsAPied1 min');
-    parties.add('${_emoji(ligne1.type)} → ${_emoji(ligne2.type)}');
-    parties.add('${_emoji(ligne3.type)} ${_labelType(ligne3.type)} vers ${arretArrivee.nom}');
-    if (tempsAPied2 > 0) parties.add('🚶 $tempsAPied2 min');
-    return parties.join(' → ');
+    final l1 = _labelType(ligne1.type);
+    final l2 = _labelType(ligne2.type);
+    final l3 = _labelType(ligne3.type);
+    return '$l1 + $l2 + $l3 vers ${arretArrivee.nom}';
   }
+
+  static String _labelType(TransportType type) {
+    switch (type) {
+      case TransportType.woroWoro:
+        return 'Woro-Woro';
+      case TransportType.gbaka:
+        return 'Gbaka';
+      case TransportType.sotra:
+        return 'SOTRA';
+      case TransportType.yango:
+        return 'Yango';
+    }
+  }
+
+  static String _conseilParType(TransportType type, String arret) {
+    switch (type) {
+      case TransportType.woroWoro:
+        return 'Dis "${arret}" au chauffeur pour descendre.';
+      case TransportType.gbaka:
+        return 'Crie "$arret" au chauffeur ou au receveur.';
+      case TransportType.sotra:
+        return 'Prépare-toi à descendre à l\'arrêt annoncé.';
+      case TransportType.yango:
+        return 'Suis la navigation Yango jusqu\'à destination.';
+    }
+  }
+
+  static int _tempsAPied(double metres) {
+    if (metres <= 0) return 0;
+    var minutes = (metres / 4000 * 60).round().clamp(1, 120);
+    if (_conditionsActives.pluie) minutes = (minutes * 1.25).round();
+    return minutes;
+  }
+
+  static int _estimerTempsTransport(TransportType type, int heure) {
+    final base = switch (type) {
+      TransportType.woroWoro => 18,
+      TransportType.gbaka => 22,
+      TransportType.sotra => 25,
+      TransportType.yango => 20,
+    };
+
+    var facteur = 1.0;
+
+    final pointe = (heure >= 7 && heure <= 9) || (heure >= 17 && heure <= 20);
+    if (pointe) facteur *= 1.5;
+
+    // Embouteillages : les véhicules collectifs coincés dans la circulation
+    // sont plus pénalisés que le VTC (Yango peut esquiver une partie).
+    if (_conditionsActives.embouteillage) {
+      facteur *= switch (type) {
+        TransportType.woroWoro => 1.6,
+        TransportType.gbaka => 1.6,
+        TransportType.sotra => 1.5,
+        TransportType.yango => 1.3,
+      };
+    }
+
+    // Pluie : ralentit tout (véhicules ouverts, visibilité, marche plus lente).
+    if (_conditionsActives.pluie) {
+      facteur *= switch (type) {
+        TransportType.woroWoro => 1.3,
+        TransportType.gbaka => 1.25,
+        TransportType.sotra => 1.2,
+        TransportType.yango => 1.15,
+      };
+    }
+
+    return (base * facteur).round();
+  }
+
+  static double _score({required int duree, required int prix, required int correspondances}) {
+    var s = duree + prix * 2.0 + correspondances * 5;
+    // Sous la pluie, chaque correspondance devient un point d'exposition/attente
+    // supplémentaire : on pénalise davantage les trajets à plusieurs correspondances.
+    if (_conditionsActives.pluie) s += correspondances * 4;
+    return s;
+  }
+}
+
+class _RoutingOptions {
+  final double userLat;
+  final double userLon;
+  final double destLat;
+  final double destLon;
+  final List<Ligne> lignes;
+  final int heure;
+  final Set<String> lignesExclues;
+  final bool forcerWoroWoro;
+  final ConditionsTrafic conditions;
+
+  const _RoutingOptions({
+    required this.userLat,
+    required this.userLon,
+    required this.destLat,
+    required this.destLon,
+    required this.lignes,
+    required this.heure,
+    this.lignesExclues = const <String>{},
+    this.forcerWoroWoro = false,
+    this.conditions = const ConditionsTrafic(),
+  });
 }

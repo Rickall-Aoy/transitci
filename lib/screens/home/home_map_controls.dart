@@ -8,12 +8,20 @@ class HomeMapControls extends StatelessWidget {
     required this.onZoomIn,
     required this.onZoomOut,
     required this.onToggleFollow,
+    required this.selectingDepartureMode,
+    required this.onToggleDepartureMode,
+    this.hasCustomDeparture = false,
+    this.onResetDeparture,
   });
 
   final bool followUser;
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onToggleFollow;
+  final bool selectingDepartureMode;
+  final VoidCallback onToggleDepartureMode;
+  final bool hasCustomDeparture;
+  final VoidCallback? onResetDeparture;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +72,33 @@ class HomeMapControls extends StatelessWidget {
             ),
           ),
         ),
+        if (hasCustomDeparture || selectingDepartureMode) ...[
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: selectingDepartureMode ? onToggleDepartureMode : (onResetDeparture ?? onToggleDepartureMode),
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: selectingDepartureMode
+                    ? AppTheme.primary
+                    : (hasCustomDeparture ? AppTheme.primary.withValues(alpha: 0.15) : btnBg),
+                borderRadius: BorderRadius.circular(14),
+                border: hasCustomDeparture && !selectingDepartureMode
+                    ? Border.all(color: AppTheme.primary, width: 1.5)
+                    : null,
+                boxShadow: [shadow],
+              ),
+              child: Icon(
+                selectingDepartureMode ? Icons.close : Icons.location_pin,
+                color: selectingDepartureMode
+                    ? Colors.white
+                    : (hasCustomDeparture ? AppTheme.primary : btnIcon),
+                size: 22,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

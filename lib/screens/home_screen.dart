@@ -17,10 +17,14 @@ import '../widgets/signaler_arret_widget.dart';
 import '../services/routing_service.dart';
 import '../services/settings_service.dart';
 import '../services/crowdsourcing_service.dart';
+import '../services/guide_service.dart';
+import '../services/tip_service.dart';
 import '../data/lignes_mock.dart';
 import '../models/gare.dart';
 import '../models/ligne.dart';
+import '../models/conditions_trafic.dart';
 import '../app_theme.dart';
+import '../widgets/ai_guide_overlay.dart';
 import 'results_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -51,11 +55,18 @@ class _HomeScreenState extends State<HomeScreen>
   bool _followUser = false;
   bool _isLoadingVehicles = false;
   List<ArretSignale> _arretsSignales = [];
-  List<Ligne> _lignesActives = lignesMock;
+  List<Ligne> _lignesActives = [];
   BitmapDescriptor? _iconUserPosition;
   BitmapDescriptor? _iconUserPositionPulse;
   Timer? _cameraDebounce;
   String _markerSignature = '';
+  bool _panelExpanded = true;
+  DateTime? _lastPositionUpdate;
+  static const _positionThrottle = Duration(milliseconds: 1000);
+
+  /// Conditions de simulation (pluie / embouteillages) appliquées au calcul
+  /// des trajets, pilotées depuis le panneau du bas.
+  ConditionsTrafic _conditions = const ConditionsTrafic();
 
   // Controllers d'animation
   late AnimationController _panelController;
@@ -82,6 +93,63 @@ class _HomeScreenState extends State<HomeScreen>
       _destNom != null &&
       _destLat != null &&
       _destLon != null;
+
+  LatLng? _departurePosition;
+  String? _departureLabel;
+  bool _selectingDepartureMode = false;
+
+  LatLng get _originPosition => _departurePosition ?? LatLng(_currentPosition!.latitude, _currentPosition!.longitude);
+  bool get _hasCustomDeparture => _departurePosition != null;
+
+  void _setDeparturePosition(LatLng position, {String? label}) {
+    setState(() {
+      _departurePosition = position;
+      _departureLabel = label ?? 'Départ personnalisé';
+      _selectingDepartureMode = false;
+    });
+    _addDepartureMarker(position);
+    _mapController?.animateCamera(CameraUpdate.newLatLngZoom(position, 15));
+  }
+
+  void _clearDeparturePosition() {
+    setState(() {
+      _departurePosition = null;
+      _departureLabel = null;
+      _selectingDepartureMode = false;
+    });
+    if (_currentPosition != null) {
+      _updateUserMarker();
+    }
+    _refreshMarkers();
+  }
+
+  void _toggleDepartureSelectionMode() {
+    if (_selectingDepartureMode) {
+      setState(() => _selectingDepartureMode = false);
+    } else {
+      setState(() => _selectingDepartureMode = true);
+      HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Appuie long sur la carte pour choisir le point de départ'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  void _addDepartureMarker(LatLng position) {
+    final nouveaux = Set<Marker>.from(_overlayMarkers);
+    nouveaux.removeWhere((m) => m.markerId.value == 'departure_custom');
+    nouveaux.add(Marker(
+      markerId: const MarkerId('departure_custom'),
+      position: position,
+      infoWindow: InfoWindow(title: 'Départ', snippet: _departureLabel),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+    ));
+    _overlayMarkers = nouveaux;
+    _refreshMarkers();
+  }
 
   Future<void> _loadSettings() async {
     final auto = await SettingsService.getAutoTheme();
@@ -112,6 +180,13 @@ class _HomeScreenState extends State<HomeScreen>
       begin: const Offset(0, 1),
       end: Offset.zero,
     ).animate(_panelAnimation);
+
+    GuideService().start();
+    GuideService().showTip(TipService.instance.getTip(
+      TipEvent.appOpen,
+      heure: DateTime.now().hour,
+      conditions: _conditions,
+    ));
   }
 
   @override
@@ -182,44 +257,82 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _chargerLignesSupabase() async {
-    final lignesSupabase = await SupabaseService.getLignes();
+    List<Ligne> lignesSupabase = <Ligne>[];
+    try {
+      lignesSupabase = await SupabaseService.getLignes().timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => <Ligne>[],
+      );
+    } catch (e) {
+      debugPrint('⚠️ getLignes() a échoué: $e');
+    }
 
     final lignesMockSansSOTRA =
         lignesMock.where((l) => l.type != TransportType.sotra).toList();
 
-    if (lignesSupabase.isEmpty) {
-      debugPrint('⚠️ Supabase vide — utilisation des données mock (GTFS inclus)');
-      setState(() {
-        _lignesActives = [...lignesMockSansSOTRA, ...lignesSotra];
-      });
-      return;
+    final gtfsLignes = GtfsLoader.instance.lignes;
+    final lignesGtfs = gtfsLignes.where((l) => l.type != TransportType.sotra).toList();
+    final lignesGtfsSotra = gtfsLignes.where((l) => l.type == TransportType.sotra).toList();
+
+    final candidates = <Ligne>[
+      ...lignesGtfs,
+      ...lignesMockSansSOTRA,
+    ];
+
+    final deja = <String>{};
+    final uniques = <Ligne>[];
+    for (final l in candidates) {
+      if (l.id.isEmpty) continue;
+      if (!deja.add(l.id)) continue;
+      uniques.add(l);
+    }
+
+    final vu = <String>{...deja};
+    final ajoutSupabase = <Ligne>[];
+    for (final l in lignesSupabase) {
+      if (l.id.isEmpty) continue;
+      if (!vu.add(l.id)) continue;
+      ajoutSupabase.add(l);
     }
 
     setState(() {
-      _lignesActives = [...lignesMockSansSOTRA, ...lignesSupabase];
+      _lignesActives = [
+        ...uniques,
+        ...lignesGtfsSotra,
+        ...ajoutSupabase,
+      ];
     });
 
-    debugPrint('✅ ${lignesSupabase.length} lignes depuis Supabase');
-    debugPrint('✅ Total: ${_lignesActives.length} lignes actives');
+    debugPrint('✅ GTFS=${lignesGtfs.length + lignesGtfsSotra.length} '
+        'mock=${lignesMockSansSOTRA.length} '
+        'supabase=${lignesSupabase.length} '
+        'total=${_lignesActives.length}');
   }
 
   Future<void> _loadPosition() async {
-    // Supabase en parallèle (non bloquant)
-    final lignesSotraFuture = SupabaseService.getLignesSotra().timeout(
-      const Duration(seconds: 10),
-      onTimeout: () => <Map<String, dynamic>>[],
-    );
-    final supabaseTask = _chargerLignesSupabase().timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {},
-    );
-
     // Position OPTIONNELLE : récupérée dans une méthode dédiée (ré-appelable
     // au retour au premier plan). Si elle échoue, on continue sans centrer.
     await _fetchPosition();
 
     if (!mounted) return;
     setState(() => _isLoading = false);
+
+    // GTFS d'abord pour garantir que les lignes/arrêts sont disponibles.
+    await GtfsLoader.instance.initialize().timeout(
+      const Duration(seconds: 20),
+      onTimeout: () {},
+    );
+    debugPrint('📦 GTFS initialisé: ${GtfsLoader.instance.isLoaded}');
+
+    // Supabase en parallèle (non bloquant)
+    final lignesSotraFuture = SupabaseService.getLignesSotra().timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => <Map<String, dynamic>>[],
+    );
+    final supabaseTask = _chargerLignesSupabase().timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {},
+    );
 
     // Centre de la carte : position si dispo, sinon position par défaut
     final center = _currentPosition != null
@@ -230,6 +343,10 @@ class _HomeScreenState extends State<HomeScreen>
 
     // S'assure que les lignes Supabase sont chargées avant ClusterService
     await supabaseTask;
+
+    debugPrint('🧭 lignesActives=${_lignesActives.length} '
+        'mock=${lignesMock.where((l)=>l.type!=TransportType.sotra).length} '
+        'sotra=${_lignesActives.where((l)=>l.type==TransportType.sotra).length}');
 
     final arretsSupabase = lignesSotra
         .map((l) => <String, dynamic>{
@@ -307,14 +424,23 @@ class _HomeScreenState extends State<HomeScreen>
   void _startPositionStream() {
     if (_positionStreamStarted || _currentPosition == null) return;
     _positionStreamStarted = true;
+
     _positionStreamSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 25,
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 50,
       ),
     ).listen((pos) {
       if (!mounted) return;
-      setState(() => _currentPosition = pos);
+
+      final now = DateTime.now();
+      if (_lastPositionUpdate != null &&
+          now.difference(_lastPositionUpdate!) < _positionThrottle) {
+        return;
+      }
+      _lastPositionUpdate = now;
+
+      _currentPosition = pos;
       _updateUserMarker();
       if (_followUser && _mapController != null) {
         _mapController!.animateCamera(
@@ -436,23 +562,31 @@ class _HomeScreenState extends State<HomeScreen>
 
     setState(() => _isSearching = true);
 
+    // Laisse Flutter peindre l'overlay de recherche avant le calcul
+    // (qui reste synchrone) : évite le freeze visuel et l'absence d'animation.
+    await Future.microtask(() {});
+
+    final originLat = _originPosition.latitude;
+    final originLon = _originPosition.longitude;
+
     final lignes = _lignesActives;
 
     final trajets = RoutingService.calculerTrajets(
-      userLat: _currentPosition!.latitude,
-      userLon: _currentPosition!.longitude,
+      userLat: originLat,
+      userLon: originLon,
       destLat: destLat,
       destLon: destLon,
       lignes: lignes,
       heure: DateTime.now().hour,
+      conditions: _conditions,
     );
 
     setState(() => _isSearching = false);
 
     if (trajets.isNotEmpty && _mapController != null) {
       final bounds = _calculerBounds(
-        userLat: _currentPosition!.latitude,
-        userLon: _currentPosition!.longitude,
+        userLat: originLat,
+        userLon: originLon,
         destLat: destLat,
         destLon: destLon,
       );
@@ -468,8 +602,9 @@ class _HomeScreenState extends State<HomeScreen>
         destination: nom,
         destLat: destLat,
         destLon: destLon,
-        userLat: _currentPosition?.latitude,
-        userLon: _currentPosition?.longitude,
+        userLat: originLat,
+        userLon: originLon,
+        conditions: _conditions,
       ),
       transitionsBuilder: (_, animation, __, child) => SlideTransition(
         position: Tween<Offset>(
@@ -508,7 +643,7 @@ class _HomeScreenState extends State<HomeScreen>
             top: 0,
             left: 0,
             right: 0,
-            bottom: 280,
+            bottom: _panelExpanded ? 280 : 80,
             child: HomeMapView(
               initialCameraPosition: _defaultPosition,
               mapStyle: _mapStyle,
@@ -527,6 +662,13 @@ class _HomeScreenState extends State<HomeScreen>
                   ClusterService.onCameraIdle();
                 });
               },
+              onMapTap: _selectingDepartureMode
+                  ? (position) {
+                      if (_selectingDepartureMode) {
+                        _setDeparturePosition(position);
+                      }
+                    }
+                  : null,
             ),
           ),
 
@@ -538,6 +680,10 @@ class _HomeScreenState extends State<HomeScreen>
               onZoomIn: _zoomIn,
               onZoomOut: _zoomOut,
               onToggleFollow: _toggleFollow,
+              hasCustomDeparture: _hasCustomDeparture,
+              selectingDepartureMode: _selectingDepartureMode,
+              onToggleDepartureMode: _toggleDepartureSelectionMode,
+              onResetDeparture: _hasCustomDeparture ? _clearDeparturePosition : null,
             ),
           ),
 
@@ -570,6 +716,7 @@ class _HomeScreenState extends State<HomeScreen>
             right: 20,
             child: HomeHeader(
               autoTheme: _autoTheme,
+              isNight: _isNight,
               isLoading: _isLoading,
               onAutoThemeChanged: (value) {
                 if (!mounted) return;
@@ -584,45 +731,16 @@ class _HomeScreenState extends State<HomeScreen>
           // ── Overlay recherche en cours ──
           if (_isSearching) const HomeSearchingOverlay(),
 
-          Positioned(
-            bottom: 180,
-            right: 16,
-            child: HomeAddStopButton(
-              onTap: _ouvrirAjouterArret,
-            ),
-          ),
+          // ── Sélection du point de départ ──
+          if (_selectingDepartureMode) const HomeDepartureSelectionOverlay(isNight: true),
 
-          // ── Panel bas animé ──
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: HomeBottomPanel(
-                isNight: _isNight,
-                canSearch: _canSearch,
-                hasCurrentPosition: _currentPosition != null,
-                onReportProblem: _ouvrirSignalerProbleme,
-                onAddStop: _ouvrirAjouterArret,
-                onDestinationSelected: (nom, lat, lon) {
-                  setState(() {
-                    _destNom = nom;
-                    _destLat = lat;
-                    _destLon = lon;
-                  });
-                  _onDestinationSubmitted(nom, lat, lon);
-                },
-                onGo: _canSearch
-                    ? () => _onDestinationSubmitted(
-                          _destNom!,
-                          _destLat!,
-                          _destLon!,
-                        )
-                    : null,
-              ),
+          // ── Bannière départ personnalisé ──
+          if (_hasCustomDeparture && _departureLabel != null)
+            HomeDepartureBanner(
+              departureLabel: _departureLabel!,
+              onReset: _clearDeparturePosition,
+              isNight: _isNight,
             ),
-          ),
 
           // ── Erreur ──
           if (_errorMessage != null)
@@ -635,6 +753,83 @@ class _HomeScreenState extends State<HomeScreen>
                 onSettings: () => LocationService.openAppSettings(),
               ),
             ),
+
+          // ── Panel bas animé ──
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: GestureDetector(
+              onVerticalDragUpdate: (details) {
+                if (details.primaryDelta == null) return;
+                if (details.primaryDelta! < -15 && !_panelExpanded) {
+                  setState(() => _panelExpanded = true);
+                } else if (details.primaryDelta! > 15 && _panelExpanded) {
+                  setState(() => _panelExpanded = false);
+                }
+              },
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
+                child: SlideTransition(
+                  position: _slideAnimation,
+              child: HomeBottomPanel(
+                isNight: _isNight,
+                canSearch: _canSearch,
+                hasCurrentPosition: _currentPosition != null,
+                hasCustomDeparture: _hasCustomDeparture,
+                departureLabel: _departureLabel,
+                collapsed: !_panelExpanded,
+                conditions: _conditions,
+                onConditionsChanged: (c) {
+                  final old = _conditions;
+                  setState(() => _conditions = c);
+                  if (c.pluie != old.pluie) {
+                    GuideService().showTip(TipService.instance.getTip(
+                      TipEvent.rainToggled,
+                      heure: DateTime.now().hour,
+                      conditions: c,
+                    ));
+                  }
+                  if (c.embouteillage != old.embouteillage) {
+                    GuideService().showTip(TipService.instance.getTip(
+                      TipEvent.trafficToggled,
+                      heure: DateTime.now().hour,
+                      conditions: c,
+                    ));
+                  }
+                },
+                onReportProblem: _ouvrirSignalerProbleme,
+                onAddStop: _ouvrirAjouterArret,
+                onDestinationSelected: (nom, lat, lon) {
+                  setState(() {
+                    _destNom = nom;
+                    _destLat = lat;
+                    _destLon = lon;
+                  });
+                  GuideService().triggerStep(GuideStep.destinationSelected, destination: nom);
+                  _onDestinationSubmitted(nom, lat, lon);
+                },
+                onGo: _canSearch
+                    ? () => _onDestinationSubmitted(
+                          _destNom!,
+                          _destLat!,
+                          _destLon!,
+                        )
+                    : null,
+                onToggleDepartureMode: _toggleDepartureSelectionMode,
+                onResetDeparture: _clearDeparturePosition,
+                onToggleCollapsed: () =>
+                    setState(() => _panelExpanded = !_panelExpanded),
+              ),
+                ),
+              ),
+            ),
+          ),
+          // ── Guide IA animé ──
+          // if (GuideService().isActive && GuideService().stream != null)
+            // const AiGuideOverlay(),
+
         ],
       ),
     );

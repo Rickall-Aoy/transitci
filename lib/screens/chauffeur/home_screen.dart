@@ -573,7 +573,11 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 8),
           Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
           const SizedBox(height: 2),
-          Text(valeur, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w500)),
+          Text(valeur,
+              style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF0A0A0A))),
           if (note != null) ...[
             const SizedBox(height: 4),
             Text(note, style: const TextStyle(fontSize: 11, color: Colors.black38)),
@@ -588,7 +592,10 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Activité récente',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF0A0A0A))),
         const SizedBox(height: 8),
         if (_activitesRecentes.isEmpty)
           const Padding(
@@ -636,7 +643,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(activite['titre'] as String,
-                            style: const TextStyle(fontSize: 12)),
+                            style: const TextStyle(
+                                fontSize: 12, color: Color(0xFF0A0A0A))),
                         const SizedBox(height: 1),
                         Text(
                           _formaterDate(activite['created_at'] as String),

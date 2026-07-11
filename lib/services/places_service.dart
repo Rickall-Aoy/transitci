@@ -30,6 +30,9 @@ class PlacesService {
       final response = await http.get(
         url,
         headers: {'User-Agent': _userAgent}, // requis par la politique Nominatim
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => http.Response('', 408),
       );
 
       if (response.statusCode != 200) {

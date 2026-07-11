@@ -11,6 +11,7 @@ class HomeMapView extends StatelessWidget {
     required this.onMapCreated,
     required this.onCameraMove,
     required this.onCameraIdle,
+    this.onMapTap,
   });
 
   final CameraPosition initialCameraPosition;
@@ -20,6 +21,7 @@ class HomeMapView extends StatelessWidget {
   final ValueChanged<GoogleMapController> onMapCreated;
   final ValueChanged<CameraPosition> onCameraMove;
   final VoidCallback onCameraIdle;
+  final ValueChanged<LatLng>? onMapTap;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +38,8 @@ class HomeMapView extends StatelessWidget {
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
       mapType: MapType.normal,
+      onTap: onMapTap,
+      onLongPress: onMapTap,
     );
   }
 }

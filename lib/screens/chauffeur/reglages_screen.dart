@@ -84,7 +84,10 @@ class ReglagesScreen extends StatelessWidget {
                     children: [
                       const Text(
                         'Mon profil',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF0A0A0A)),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -171,7 +174,7 @@ class ReglagesScreen extends StatelessWidget {
             Expanded(
               child: Text(label, style: const TextStyle(fontSize: 13)),
             ),
-            const Icon(Icons.chevron_right, size: 18, color: Colors.black26),
+            const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
           ],
         ),
       ),
