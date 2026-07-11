@@ -18,7 +18,6 @@ import '../services/routing_service.dart';
 import '../services/settings_service.dart';
 import '../services/crowdsourcing_service.dart';
 import '../services/guide_service.dart';
-import '../services/tip_service.dart';
 import '../data/lignes_mock.dart';
 import '../models/gare.dart';
 import '../models/ligne.dart';
@@ -182,11 +181,6 @@ class _HomeScreenState extends State<HomeScreen>
     ).animate(_panelAnimation);
 
     GuideService().start();
-    GuideService().showTip(TipService.instance.getTip(
-      TipEvent.appOpen,
-      heure: DateTime.now().hour,
-      conditions: _conditions,
-    ));
   }
 
   @override
@@ -782,22 +776,7 @@ class _HomeScreenState extends State<HomeScreen>
                 collapsed: !_panelExpanded,
                 conditions: _conditions,
                 onConditionsChanged: (c) {
-                  final old = _conditions;
                   setState(() => _conditions = c);
-                  if (c.pluie != old.pluie) {
-                    GuideService().showTip(TipService.instance.getTip(
-                      TipEvent.rainToggled,
-                      heure: DateTime.now().hour,
-                      conditions: c,
-                    ));
-                  }
-                  if (c.embouteillage != old.embouteillage) {
-                    GuideService().showTip(TipService.instance.getTip(
-                      TipEvent.trafficToggled,
-                      heure: DateTime.now().hour,
-                      conditions: c,
-                    ));
-                  }
                 },
                 onReportProblem: _ouvrirSignalerProbleme,
                 onAddStop: _ouvrirAjouterArret,
@@ -807,7 +786,6 @@ class _HomeScreenState extends State<HomeScreen>
                     _destLat = lat;
                     _destLon = lon;
                   });
-                  GuideService().triggerStep(GuideStep.destinationSelected, destination: nom);
                   _onDestinationSubmitted(nom, lat, lon);
                 },
                 onGo: _canSearch

@@ -83,7 +83,6 @@ class _ResultsScreenState extends State<ResultsScreen>
 
     _listController.forward();
     GuideService().start();
-    GuideService().triggerStep(GuideStep.resultsShown, destination: widget.destination);
     GuideService().showTip(TipService.instance.getTip(
       TipEvent.resultsShown,
       heure: DateTime.now().hour,
