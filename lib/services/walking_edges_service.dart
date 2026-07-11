@@ -37,12 +37,16 @@ class WalkingEdgesService {
   }
 
   /// Construit les walking edges entre arrêts de *lignes différentes*,
-  /// dans un rayon de 400 m, de façon bidirectionnelle.
+  /// dans un rayon de [maxDistanceMetres] (400 m par défaut), de façon
+  /// bidirectionnelle.
   ///
   /// Coût : (distanceMetres / 1.3889) * 2.5
   ///   - 1.3889 m/s ≈ 5 km/h (vitesse de marche)
   ///   - ×2.5 : pénalité (attente, traversée, confort) pour le pathfinding.
-  static List<Edge> buildWalkingEdges(List<Stop> stops) {
+  static List<Edge> buildWalkingEdges(
+    List<Stop> stops, {
+    double maxDistanceMetres = 400,
+  }) {
     final edges = <Edge>[];
     for (int i = 0; i < stops.length; i++) {
       for (int j = i + 1; j < stops.length; j++) {
@@ -59,8 +63,8 @@ class WalkingEdgesService {
           b.longitude,
         );
 
-        // Condition : distance <= 400 m.
-        if (d > 400) continue;
+        // Condition : distance <= plafond.
+        if (d > maxDistanceMetres) continue;
 
         final cout = (d / 1.3889) * 2.5;
 

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/ligne.dart';
 import '../models/gare.dart';
+import 'arret_service.dart';
 
 class SupabaseService {
   static final _client = Supabase.instance.client;
@@ -63,7 +64,10 @@ class SupabaseService {
       }
 
       debugPrint('✅ ${lignes.length}/${rows.length} lignes Supabase exploitables');
-      return lignes;
+      // Injecte les arrêts Supabase (ligne_arrets) comme arrêts intermédiaires
+      // → points de correspondance supplémentaires pour le routing existant.
+      // No-op si ArretService n'est pas encore chargé.
+      return ArretService.instance.enrichirLignes(lignes);
     } catch (e) {
       debugPrint('❌ Erreur getLignes (requête/connexion): $e');
       return [];

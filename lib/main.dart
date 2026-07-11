@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_theme.dart';
 import 'config/supabase_config.dart';
+import 'services/arret_service.dart';
 import 'screens/chauffeur/chauffeur_navigation.dart';
 import 'screens/assistant/assistant_screen.dart';
 import 'screens/chauffeur/login_screen.dart';
@@ -26,6 +27,15 @@ Future<void> main() async {
   );
 
   debugPrint('✅ Supabase OK');
+
+  // Charge et met en cache les arrêts (44 gares) + walking edges, une seule
+  // fois au démarrage. Non bloquant fatal : en cas d'échec, le routing
+  // continue de fonctionner sans les arrêts Supabase.
+  await ArretService.instance.initialize().timeout(
+    const Duration(seconds: 8),
+    onTimeout: () =>
+        debugPrint('⚠️ ArretService: timeout au démarrage (chargement différé)'),
+  );
 
   runApp(const TransitCIApp());
 }
