@@ -69,6 +69,7 @@ class HomeHeader extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
+                  _DemoButton(isNight: isNight),
                   _AutoThemeButton(
                     autoTheme: autoTheme,
                     isNight: isNight,
@@ -125,6 +126,51 @@ class HomeHeader extends StatelessWidget {
             style: TextStyle(color: subtitleText, fontSize: 13),
           ),
       ],
+    );
+  }
+}
+
+class _DemoButton extends StatelessWidget {
+  const _DemoButton({required this.isNight});
+
+  final bool isNight;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        Navigator.pushNamed(context, '/demo');
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF6B2B),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [
+            BoxShadow(
+              color: Color.fromRGBO(255, 107, 43, 0.4),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.play_circle_fill, size: 14, color: Colors.white),
+            SizedBox(width: 5),
+            Text(
+              'Démo',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
